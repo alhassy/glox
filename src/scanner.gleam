@@ -173,6 +173,16 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step, LError) {
     "*" <> more -> Ok(Step(Operator(Times, line), more))
     "+" <> more -> Ok(Step(Operator(Plus, line), more))
     "-" <> more -> Ok(Step(Operator(Minus, line), more))
-    _ -> Error(LError("Unexpected character ", line))
+    "\"" <> more ->
+      case string.contains(more, "\"") {
+        False -> Error(LError("Unterminated string", line))
+        True -> {
+          let #(string, more2) =
+            string.split_once(more, on: "\"")
+            |> result.lazy_unwrap(fn() { panic })
+          Ok(Step(Literal(String(string), line), more2))
+        }
+      }
+    _ -> Error(LError("Unexpected character", line))
   }
 }

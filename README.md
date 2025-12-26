@@ -25,6 +25,9 @@ lox > !*+-/=<> <= == // operators
 
 lox > (( )){} // grouping stuff
   Ok([Punctuation(LeftParen, 0), Punctuation(LeftParen, 0), Punctuation(Whitespace, 0), Punctuation(RightParen, 0), Punctuation(RightParen, 0), Punctuation(LeftBrace, 0), Punctuation(RightBrace, 0), Punctuation(Whitespace, 0), Punctuation(Comment, 0)])  
+
+lox > "Hello" + "World"
+  Ok([Literal(String("Hello"), 0), Punctuation(Whitespace, 0), Operator(Plus, 0), Punctuation(Whitespace, 0), Literal(String("World"), 0)])
 ```
 
 The third line above shows the resulting scanned tokens 😁
