@@ -1,8 +1,11 @@
 // The "scanner" module is concerned with converting a stream of characters into a semantic list of "tokens".
 
-import error_handling.{type LError, LError} // Get type & constructor
+import error_handling.{type LError, LError}
+
+// Get type & constructor
 import gleam/io
 import gleam/result
+import gleam/string
 
 // The first step in any compiler or interpreter is scanning. The scanner takes in raw source code as a series of characters and groups it into a series of chunks we call tokens. These are the meaningful “words” and “punctuation” that make up the language’s grammar.
 
@@ -57,6 +60,8 @@ pub type Punctuation {
   Dot
   Semicolon
   Assignment
+  Comment
+  Whitespace
   EOF
   // This exists to make the parser easier to implement, like everything else lol
 }
@@ -127,6 +132,12 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step, LError) {
   case text {
     // Either success, or else an error: Unknown char
     "" -> Ok(Step(Punctuation(EOF, line), ""))
+    // Whitespace
+    " " <> more -> Ok(Step(Punctuation(Whitespace, line), more))
+    "\t" <> more -> Ok(Step(Punctuation(Whitespace, line), more))
+    "\r" <> more -> Ok(Step(Punctuation(Whitespace, line), more))
+    "\n" <> more -> Ok(Step(Punctuation(Whitespace, line), more))
+    // Simple single chars
     "(" <> more -> Ok(Step(Punctuation(LeftParen, line), more))
     ")" <> more -> Ok(Step(Punctuation(RightParen, line), more))
     "{" <> more -> Ok(Step(Punctuation(LeftBrace, line), more))
@@ -142,10 +153,26 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step, LError) {
     "!=" <> more -> Ok(Step(Operator(NotEqual, line), more))
     "!" <> more -> Ok(Step(Operator(Negation, line), more))
     "==" <> more -> Ok(Step(Operator(Equal, line), more))
+    "=" <> more -> Ok(Step(Punctuation(Assignment, line), more))
     "<=" <> more -> Ok(Step(Operator(AtMost, line), more))
     "<" <> more -> Ok(Step(Operator(LessThan, line), more))
     ">=" <> more -> Ok(Step(Operator(AtLeast, line), more))
     ">" <> more -> Ok(Step(Operator(GreaterThan, line), more))
+    "//" <> more ->
+      case string.contains(more, "\n") {
+        // comment on final line:
+        False -> Ok(Step(Punctuation(Comment, line), ""))
+        True -> {
+          let #(_comment, more2) =
+            string.split_once(more, on: "\n")
+            |> result.lazy_unwrap(fn() { panic })
+          Ok(Step(Punctuation(Comment, line), more2))
+        }
+      }
+    "/" <> more -> Ok(Step(Operator(Division, line), more))
+    "*" <> more -> Ok(Step(Operator(Times, line), more))
+    "+" <> more -> Ok(Step(Operator(Plus, line), more))
+    "-" <> more -> Ok(Step(Operator(Minus, line), more))
     _ -> Error(LError("Unexpected character ", line))
   }
 }
