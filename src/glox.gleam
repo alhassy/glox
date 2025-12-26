@@ -1,6 +1,6 @@
 import gleam/io
 import gleam/string
-import scanner
+import error_handling
 
 import argv
 
@@ -34,7 +34,7 @@ pub fn run(line) {
   case string.trim(line) {
     "exit" -> Nil
     _ -> {
-      io.println("Running... " <> line)
+      error_handling.report(0, "Unknown Command", line)
       run_repl_prompt()
     }
   }
