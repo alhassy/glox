@@ -1,6 +1,5 @@
-
-import gleam/io
 import gleam/int
+import gleam/io
 
 // Error Handling
 
@@ -22,5 +21,13 @@ pub fn error(line: Int, _where: String, message: String) {
 
 /// Tells the user some syntax error occurred on a given line
 pub fn report(line: Int, where: String, message: String) {
-  io.println("[line " <> int.to_string(line) <> "] Error " <> where <> ": " <> message)
+  io.println(
+    "[line " <> int.to_string(line) <> "] Error " <> where <> ": " <> message,
+  )
+}
+
+/// Denotes an error message relative to a given location
+/// (Using prefix L to denote a Lox error, so as not to confilict with Gleam's Result.Error)
+pub type LError {
+  LError(message: String, line: Int)
 }

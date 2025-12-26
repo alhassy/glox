@@ -1,6 +1,6 @@
 import gleam/io
 import gleam/string
-import error_handling
+import scanner
 
 import argv
 
@@ -33,12 +33,9 @@ pub fn run_repl_prompt() {
 pub fn run(line) {
   case string.trim(line) {
     "exit" -> Nil
-    _ -> {
-      error_handling.report(0, "Unknown Command", line)
+    text -> {
+      echo scanner.scan_tokens(text, 0)
       run_repl_prompt()
     }
   }
-  // TODO
-  // List<Token> tokens = scanner.scanTokens();
-  // for (Token token : tokens) System.out.println(token);
 }
