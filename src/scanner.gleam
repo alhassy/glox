@@ -1,9 +1,12 @@
 // The "scanner" module is concerned with converting a stream of characters into a semantic list of "tokens".
 
 import error_handling.{type LError, LError}
+import gleam/bool
 
 // Get type & constructor
-import gleam/io
+import gleam/float
+import gleam/int
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 
@@ -48,7 +51,7 @@ pub type Keyword {
 pub type Literal {
   Identifer(value: String)
   String(value: String)
-  Number(value: String)
+  Number(value: Float)
 }
 
 pub type Punctuation {
@@ -123,12 +126,13 @@ pub fn scan_tokens(source: String, line: Int) -> Result(List(Token), LError) {
   [token, ..tokens]
 }
 
-pub type Step {
-  Step(found: Token, unconsumed: String)
+/// Denotes the result of parsing a single item of type `t`
+pub type Step(t) {
+  Step(found: t, unconsumed: String)
 }
 
 /// text - start of substring being inspected
-fn scan_lexeme(text: String, line: Int) -> Result(Step, LError) {
+fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
   case text {
     // Either success, or else an error: Unknown char
     "" -> Ok(Step(Punctuation(EOF, line), ""))
@@ -163,9 +167,7 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step, LError) {
         // comment on final line:
         False -> Ok(Step(Punctuation(Comment, line), ""))
         True -> {
-          let #(_comment, more2) =
-            string.split_once(more, on: "\n")
-            |> result.lazy_unwrap(fn() { panic })
+          let assert Ok(#(_comment, more2)) = string.split_once(more, on: "\n")
           Ok(Step(Punctuation(Comment, line), more2))
         }
       }
@@ -177,12 +179,49 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step, LError) {
       case string.contains(more, "\"") {
         False -> Error(LError("Unterminated string", line))
         True -> {
-          let #(string, more2) =
-            string.split_once(more, on: "\"")
-            |> result.lazy_unwrap(fn() { panic })
+          let assert Ok(#(string, more2)) = string.split_once(more, on: "\"")
           Ok(Step(Literal(String(string), line), more2))
         }
       }
-    _ -> Error(LError("Unexpected character", line))
+    more ->
+      more
+      |> parse_number
+      |> option.to_result(LError("Unexpected character", line))
+      |> result.map(fn(step) {
+        Step(Literal(Number(step.found), line), step.unconsumed)
+      })
   }
+}
+
+/// Realize a string `x <> y`, where `x` is a number and `y` does not start with a digit, 
+/// get `x` as a `Float` along with the unconsumed input `y`; if possible. 
+/// ### Example: `"1.23and more"` is split into `Some(#(1.23, "and more"))`.
+pub fn parse_number(str: String) -> Option(Step(Float)) {
+  let #(numeric_prefix, rest) = split_on_numeric(str)
+  case numeric_prefix {
+    "" -> None
+    _ ->
+      numeric_prefix
+      |> float.parse
+      |> result.lazy_or(fn() {
+        numeric_prefix |> int.parse |> result.map(int.to_float)
+      })
+      |> option.from_result
+      |> option.map(Step(_, rest))
+  }
+}
+
+/// Splits a string into `x <> y` where `x` is a number and `y` does not start with a digit.
+/// ### Example: `"1.23and more"` is split into `#("1.23", "and more")`.
+pub fn split_on_numeric(str: String) -> #(String, String) {
+  {
+    use #(digit, rest) <- result.try(string.pop_grapheme(str))
+    use <- bool.guard(
+      when: digit != "." && { digit |> int.parse |> result.is_error },
+      return: Ok(#("", str)),
+    )
+    let #(digits, non_digits) = split_on_numeric(rest)
+    Ok(#(digit <> digits, non_digits))
+  }
+  |> result.unwrap(#("", str))
 }

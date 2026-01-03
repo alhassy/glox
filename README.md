@@ -32,6 +32,4 @@ lox > "Hello" + "World"
 
 The third line above shows the resulting scanned tokens 😁
 
-!*+-/=<> <= == // operators
-
-!*+-/=<>
+These examples are also codified as tests that can be executed with `gleam test`.
