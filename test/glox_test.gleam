@@ -1,10 +1,10 @@
 import gleam/option.{None, Some}
 import gleeunit
 import scanner.{
-  type Step, Assignment, AtMost, Comma, Comment, Division, Equal, GreaterThan,
-  LeftBrace, LeftParen, LessThan, Literal, Minus, Negation, Number, Operator,
-  Plus, Punctuation, RightBrace, RightParen, Semicolon, Step, String, Times,
-  Whitespace, parse_number, scan_tokens, split_on_numeric,
+  type Step, Assignment, AtMost, Comma, Comment, Division, Dot, Equal,
+  GreaterThan, LeftBrace, LeftParen, LessThan, Literal, Minus, Negation, Number,
+  Operator, Plus, Punctuation, RightBrace, RightParen, Semicolon, Step, String,
+  Times, Whitespace, parse_number, scan_tokens, split_on_numeric,
 }
 
 pub fn main() -> Nil {
@@ -81,6 +81,18 @@ pub fn scan_tokens_test() {
       Literal(Number(4.0), 0),
     ])
     as "Numbers can be scanned"
+
+  assert scan_tokens(".1", 0)
+    == Ok([Punctuation(Dot, 0), Literal(Number(1.0), 0)])
+    as "No leading dot in number literal syntax"
+
+  assert scan_tokens("1.", 0)
+    == Ok([Literal(Number(1.0), 0), Punctuation(Dot, 0)])
+    as "No trailing dot in number literal syntax"
+
+  assert scan_tokens("-12", 0)
+    == Ok([Operator(Minus, 0), Literal(Number(12.0), 0)])
+    as "Negative numbers are not literals, but expressions"
 }
 
 pub fn parse_number_test() {
@@ -103,5 +115,7 @@ fn from_float(x: Float) -> Step(Float) {
 pub fn split_on_numeric_test() {
   assert split_on_numeric("") == #("", "")
   assert split_on_numeric("1") == #("1", "")
+  assert split_on_numeric("1.") == #("1", ".")
+    as "Trailing dots are not part of the number syntax"
   assert split_on_numeric("1.23and more") == #("1.23", "and more")
 }

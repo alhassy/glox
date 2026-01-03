@@ -216,8 +216,11 @@ pub fn parse_number(str: String) -> Option(Step(Float)) {
 pub fn split_on_numeric(str: String) -> #(String, String) {
   {
     use #(digit, rest) <- result.try(string.pop_grapheme(str))
+    let is_trailing_dot = digit == "." && string.is_empty(rest)
+    let is_followed_by_non_digit =
+      digit != "." && { digit |> int.parse |> result.is_error }
     use <- bool.guard(
-      when: digit != "." && { digit |> int.parse |> result.is_error },
+      when: is_trailing_dot || is_followed_by_non_digit,
       return: Ok(#("", str)),
     )
     let #(digits, non_digits) = split_on_numeric(rest)
