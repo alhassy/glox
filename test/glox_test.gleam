@@ -7,8 +7,8 @@ import scanner.{
   type Step, Assignment, AtMost, Comma, Comment, Division, Dot, Equal,
   GreaterThan, Identifer, Keyword, LOr, LeftBrace, LeftParen, LessThan, Literal,
   Minus, Negation, Number, Operator, Plus, Punctuation, RightBrace, RightParen,
-  Semicolon, Step, String, Times, Whitespace, parse_number, scan_tokens,
-  split_on_identifier, split_on_numeric,
+  Semicolon, Step, String, Times, Whitespace, parse_identifier, parse_number,
+  scan_tokens,
 }
 
 pub fn main() -> Nil {
@@ -105,32 +105,24 @@ pub fn scan_tokens_test() {
 }
 
 pub fn parse_number_test() {
-  assert parse_number("1") == 1.0 |> from_float |> Some
-  assert parse_number("123") == 123.0 |> from_float |> Some
+  assert parse_number()("1") == 1.0 |> from_float |> Some
+  assert parse_number()("123") == 123.0 |> from_float |> Some
 
-  assert parse_number("1.0") == 1.0 |> from_float |> Some
-  assert parse_number("1.23") == 1.23 |> from_float |> Some
+  assert parse_number()("1.0") == 1.0 |> from_float |> Some
+  assert parse_number()("1.23") == 1.23 |> from_float |> Some
 
-  assert parse_number("a") == None
-  assert parse_number("a1") == None
+  assert parse_number()("a") == None
+  assert parse_number()("a1") == None
 
-  assert parse_number("1and more") == Step(1.0, "and more") |> Some
+  assert parse_number()("1and more") == Step(1.0, "and more") |> Some
 }
 
 fn from_float(x: Float) -> Step(Float) {
   Step(x, "")
 }
 
-pub fn split_on_numeric_test() {
-  assert split_on_numeric("") == #("", "")
-  assert split_on_numeric("1") == #("1", "")
-  assert split_on_numeric("1.") == #("1", ".")
-    as "Trailing dots are not part of the number syntax"
-  assert split_on_numeric("1.23and more") == #("1.23", "and more")
-}
-
-pub fn split_on_identifier_test() {
+pub fn parse_identifier_test() {
   assert string.compare("A", "a") == order.Lt
-  assert split_on_identifier("orchid+123") == #("orchid", "+123")
-  assert split_on_identifier("orchid1 - 2") == #("orchid1", " - 2")
+  assert parse_identifier()("orchid+123") == Some(Step("orchid", "+123"))
+  assert parse_identifier()("orchid1 - 2") == Some(Step("orchid1", " - 2"))
 }

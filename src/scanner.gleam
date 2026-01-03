@@ -2,6 +2,7 @@
 
 import error_handling.{type LError, LError}
 import gleam/bool
+import gleam/pair
 
 // Get type & constructor
 import gleam/float
@@ -191,13 +192,13 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
     more ->
       more
       // Do we have a number?
-      |> parse_number
-      |> option.map(fn(result) {
-        Step(Literal(Number(result.found), line), result.unconsumed)
-      })
+      |> {
+        parse_number()
+        |> map(fn(number) { Literal(Number(number), line) })
+      }
       // Or, do we have an identifier, which might be reserved as a keyword of the language.
       |> option.lazy_or(fn() {
-        let #(identifier, more2) = split_on_identifier(more)
+        use Step(identifier, more2) <- option.then(parse_identifier()(more))
         {
           as_reserved_keyword(identifier)
           |> option.map(Keyword(_, line))
@@ -212,49 +213,92 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
 /// Realize a string `x <> y`, where `x` is a number and `y` does not start with a digit, 
 /// get `x` as a `Float` along with the unconsumed input `y`; if possible. 
 /// ### Example: `"1.23and more"` is split into `Some(#(1.23, "and more"))`.
-pub fn parse_number(str: String) -> Option(Step(Float)) {
-  let #(numeric_prefix, rest) = split_on_numeric(str)
-  case numeric_prefix {
-    "" -> None
-    _ ->
-      numeric_prefix
-      |> float.parse
-      |> result.lazy_or(fn() {
-        numeric_prefix |> int.parse |> result.map(int.to_float)
-      })
-      |> option.from_result
-      |> option.map(Step(_, rest))
-  }
-}
-
-/// Splits a string into `x <> y` where `x` is a number and `y` does not start with a digit.
-/// ### Example: `"1.23and more"` is split into `#("1.23", "and more")`.
-pub fn split_on_numeric(str: String) -> #(String, String) {
-  {
-    use #(digit, rest) <- result.try(string.pop_grapheme(str))
-    let is_trailing_dot = digit == "." && string.is_empty(rest)
-    let is_followed_by_non_digit = digit != "." && !is_digit(digit)
-    use <- bool.guard(
-      when: is_trailing_dot || is_followed_by_non_digit,
-      return: Ok(#("", str)),
-    )
-    let #(digits, non_digits) = split_on_numeric(rest)
-    Ok(#(digit <> digits, non_digits))
-  }
-  |> result.unwrap(#("", str))
+pub fn parse_number() -> Parser(Float) {
+  parse_one_char
+  |> such_that(fn(char, unconsumed) {
+    let is_not_trailing_dot = !{ char == "." && string.is_empty(unconsumed) }
+    let is_digit_or_decimal_point = char == "." || is_digit(char)
+    is_not_trailing_dot && is_digit_or_decimal_point
+  })
+  |> star
+  |> map(string.join(_, ""))
+  |> then(fn(numeric) {
+    numeric
+    |> float.parse
+    |> result.lazy_or(fn() { numeric |> int.parse |> result.map(int.to_float) })
+    |> option.from_result
+  })
 }
 
 /// Splits a string into `x <> y` where `x` is the largest alphanumberic prefix of the string.
-/// ### Example: `"orchid+123"` is split into `#("orchid", "+123")`.
-pub fn split_on_identifier(str: String) -> #(String, String) {
-  {
-    use #(alpha, rest) <- result.try(string.pop_grapheme(str))
-    let is_followed_by_non_alpha = !is_alphanumeric(alpha)
-    use <- bool.guard(when: is_followed_by_non_alpha, return: Ok(#("", str)))
-    let #(alphas, non_alphas) = split_on_identifier(rest)
-    Ok(#(alpha <> alphas, non_alphas))
+/// ### Example: `"orchid+123"` is parsed into `#("orchid", "+123")`.
+pub fn parse_identifier() -> Parser(String) {
+  parse_one_char
+  |> filter(is_alphanumeric)
+  |> star
+  |> map(string.join(_, ""))
+}
+
+type Parser(t) =
+  fn(String) -> ParseResult(t)
+
+type ParseResult(t) =
+  Option(Step(t))
+
+/// Try to parse a single character; e.g., `"hello"` maps to `#("h", "ello")`.
+fn parse_one_char(str: String) -> ParseResult(String) {
+  str
+  |> string.pop_grapheme
+  |> option.from_result
+  |> option.map(fn(p) { Step(p.0, p.1) })
+}
+
+/// Parse using `parser` then apply `mapper` to the resulting parsed value
+fn map(parser: Parser(a), mapper: fn(a) -> b) -> Parser(b) {
+  fn(str) {
+    use Step(a, unconsumed) <- option.then(parser(str))
+    Some(Step(mapper(a), unconsumed))
   }
-  |> result.unwrap(#("", str))
+}
+
+/// Parse using `parser` then apply `mapper` to the resulting parsed value
+fn then(parser: Parser(a), mapper: fn(a) -> Option(b)) -> Parser(b) {
+  fn(str) {
+    use Step(a, unconsumed) <- option.then(parser(str))
+    use b <- option.then(mapper(a))
+    Some(Step(b, unconsumed))
+  }
+}
+
+/// Parse using `parser` but only succeed if `predicate` is holds for the parsed value
+fn filter(parser, predicate) -> Parser(t) {
+  // Equivalently: such_that(parser, fn(t, _unconsumed) { predicate(t) })
+  fn(str) {
+    use Step(t, _) as step <- option.then(parser(str))
+    use <- bool.guard(when: !predicate(t), return: None)
+    Some(step)
+  }
+}
+
+/// Parse using `parser` but only succeed if `predicate` is holds for the parsed value & unconsumed input.
+/// This is like `filter` but the given predicate has access to both the parsed value & unconsumed input.
+fn such_that(parser, relation) -> Parser(t) {
+  fn(str) {
+    use Step(t, unconsumed) as step <- option.then(parser(str))
+    use <- bool.guard(when: !relation(t, unconsumed), return: None)
+    Some(step)
+  }
+}
+
+/// Parses the largest prefix of a string that is parserable by `parser`
+fn star(parser: Parser(t)) -> Parser(List(t)) {
+  fn(str) {
+    use Step(t, unconsumed) <- option.then(parser(str))
+    unconsumed
+    |> star(parser)
+    |> option.map(fn(step) { Step([t, ..step.found], step.unconsumed) })
+    |> option.lazy_or(fn() { Some(Step([t], unconsumed)) })
+  }
 }
 
 fn is_alphanumeric(c: String) -> Bool {
