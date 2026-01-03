@@ -178,6 +178,14 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
           Ok(Step(Punctuation(Comment, line), more2))
         }
       }
+    "/*" <> more ->
+      case string.contains(more, "*/") {
+        False -> Error(LError("Unterminated multiline comment", line))
+        True -> {
+          let assert Ok(#(_comment, more2)) = string.split_once(more, on: "*/")
+          Ok(Step(Punctuation(Comment, line), more2))
+        }
+      }
     "/" <> more -> Ok(Step(Operator(Division, line), more))
     "*" <> more -> Ok(Step(Operator(Times, line), more))
     "+" <> more -> Ok(Step(Operator(Plus, line), more))

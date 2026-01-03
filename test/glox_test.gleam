@@ -66,6 +66,19 @@ pub fn scan_tokens_test() {
     ])
     as "Grouping punctuation can be scanned"
 
+  assert scan_tokens("1 /* wahid in Arabic */ * 2 /* deux in French */", 0)
+    == Ok([
+      Literal(Number(1.0), 0),
+      Punctuation(Whitespace, 0),
+      Punctuation(Comment, 0),
+      Punctuation(Whitespace, 0),
+      Operator(Times, 0),
+      Punctuation(Whitespace, 0),
+      Literal(Number(2.0), 0),
+      Punctuation(Whitespace, 0),
+      Punctuation(Comment, 0),
+    ])
+
   assert scan_tokens("\"Hello\" + \"World\"", 0)
     == Ok([
       Literal(String("Hello"), 0),
