@@ -7,6 +7,7 @@ import gleam/bool
 import gleam/float
 import gleam/int
 import gleam/option.{type Option, None, Some}
+import gleam/order
 import gleam/result
 import gleam/string
 
@@ -154,6 +155,10 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
     // then we should instead create a != lexeme. Note that the ! and = are not two independent operators. 
     // You can’t write ! = in Lox and have it behave like an inequality operator. That’s why we need to scan != as a single lexeme. 
     // Likewise, <, >, and = can all be followed by = to create the other equality and comparison operators.
+    // 
+    // 🌻 Maxmial Munch Rule: When two lexical grammar rules can both match a chunk of code that the scanner is looking at, 
+    // whichever one matches the most characters wins. E.g., `<=` should be scanned as a single `<=` token and not `<` followed by `=`;
+    // likewise `orchid` should be scanned as the single identifier `orchid` and not as the reserved keyword `or` followed by the identifier `chid`.
     "!=" <> more -> Ok(Step(Operator(NotEqual, line), more))
     "!" <> more -> Ok(Step(Operator(Negation, line), more))
     "==" <> more -> Ok(Step(Operator(Equal, line), more))
@@ -185,10 +190,16 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
       }
     more ->
       more
+      // Do we have a number?
       |> parse_number
       |> option.to_result(LError("Unexpected character", line))
       |> result.map(fn(step) {
         Step(Literal(Number(step.found), line), step.unconsumed)
+      })
+      // Or, do we have a reserved keyword or identifier?
+      |> result.lazy_or(fn() {
+        let #(identifier, more2) = split_on_identifier(more)
+        Ok(Step(Literal(Identifer(identifier), line), more2))
       })
   }
 }
@@ -217,8 +228,7 @@ pub fn split_on_numeric(str: String) -> #(String, String) {
   {
     use #(digit, rest) <- result.try(string.pop_grapheme(str))
     let is_trailing_dot = digit == "." && string.is_empty(rest)
-    let is_followed_by_non_digit =
-      digit != "." && { digit |> int.parse |> result.is_error }
+    let is_followed_by_non_digit = digit != "." && !is_digit(digit)
     use <- bool.guard(
       when: is_trailing_dot || is_followed_by_non_digit,
       return: Ok(#("", str)),
@@ -227,4 +237,32 @@ pub fn split_on_numeric(str: String) -> #(String, String) {
     Ok(#(digit <> digits, non_digits))
   }
   |> result.unwrap(#("", str))
+}
+
+/// Splits a string into `x <> y` where `x` is the largest alphanumberic prefix of the string.
+/// ### Example: `"orchid+123"` is split into `#("orchid", "+123")`.
+pub fn split_on_identifier(str: String) -> #(String, String) {
+  {
+    use #(alpha, rest) <- result.try(string.pop_grapheme(str))
+    let is_followed_by_non_alpha = !is_alphanumeric(alpha)
+    use <- bool.guard(when: is_followed_by_non_alpha, return: Ok(#("", str)))
+    let #(alphas, non_alphas) = split_on_identifier(rest)
+    Ok(#(alpha <> alphas, non_alphas))
+  }
+  |> result.unwrap(#("", str))
+}
+
+fn is_alphanumeric(c: String) -> Bool {
+  c == "_" || is_digit(c) || is_letter(c)
+}
+
+fn is_digit(c: String) -> Bool {
+  string.length(c) == 1 && { c |> int.parse |> result.is_ok }
+}
+
+fn is_letter(c: String) -> Bool {
+  string.length(c) == 1
+  // Note: "A" < "Z" < "a" < "z"  
+  && string.compare("A", c) == order.Lt
+  && string.compare(c, "z") == order.Lt
 }

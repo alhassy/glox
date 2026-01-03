@@ -1,10 +1,14 @@
+import gleam/list
 import gleam/option.{None, Some}
+import gleam/order
+import gleam/string
 import gleeunit
 import scanner.{
   type Step, Assignment, AtMost, Comma, Comment, Division, Dot, Equal,
-  GreaterThan, LeftBrace, LeftParen, LessThan, Literal, Minus, Negation, Number,
-  Operator, Plus, Punctuation, RightBrace, RightParen, Semicolon, Step, String,
-  Times, Whitespace, parse_number, scan_tokens, split_on_numeric,
+  GreaterThan, Identifer, LeftBrace, LeftParen, LessThan, Literal, Minus,
+  Negation, Number, Operator, Plus, Punctuation, RightBrace, RightParen,
+  Semicolon, Step, String, Times, Whitespace, parse_number, scan_tokens,
+  split_on_identifier, split_on_numeric,
 }
 
 pub fn main() -> Nil {
@@ -93,6 +97,12 @@ pub fn scan_tokens_test() {
   assert scan_tokens("-12", 0)
     == Ok([Operator(Minus, 0), Literal(Number(12.0), 0)])
     as "Negative numbers are not literals, but expressions"
+
+  assert scan_tokens("or", 0) == Ok([Literal(Identifer("or"), 0)])
+    as "Reserved keyword: or"
+
+  assert scan_tokens("orchid", 0) == Ok([Literal(Identifer("orchid"), 0)])
+    as "Identifier: orchid"
 }
 
 pub fn parse_number_test() {
@@ -118,4 +128,10 @@ pub fn split_on_numeric_test() {
   assert split_on_numeric("1.") == #("1", ".")
     as "Trailing dots are not part of the number syntax"
   assert split_on_numeric("1.23and more") == #("1.23", "and more")
+}
+
+pub fn split_on_identifier_test() {
+  assert string.compare("A", "a") == order.Lt
+  assert split_on_identifier("orchid+123") == #("orchid", "+123")
+  assert split_on_identifier("orchid1 - 2") == #("orchid1", " - 2")
 }
