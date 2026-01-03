@@ -102,6 +102,9 @@ pub fn scan_tokens_test() {
 
   assert scan_tokens("orchid", 0) == Ok([Literal(Identifer("orchid"), 0)])
     as "Identifier: orchid"
+
+  assert scan_tokens("Za_za", 0) == Ok([Literal(Identifer("Za_za"), 0)])
+    as "Identifier: Za_za"
 }
 
 pub fn parse_number_test() {

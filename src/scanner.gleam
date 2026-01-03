@@ -2,6 +2,7 @@
 
 import error_handling.{type LError, LError}
 import gleam/bool
+import gleam/list
 import gleam/pair
 
 // Get type & constructor
@@ -222,6 +223,8 @@ pub fn parse_number() -> Parser(Float) {
   })
   |> star
   |> map(string.join(_, ""))
+  // At this point we have parsed the longest possible numeric prefix as a string,
+  // it remains to convert it to a float.
   |> then(fn(numeric) {
     numeric
     |> float.parse
@@ -310,10 +313,13 @@ fn is_digit(c: String) -> Bool {
 }
 
 fn is_letter(c: String) -> Bool {
-  string.length(c) == 1
-  // Note: "A" < "Z" < "a" < "z"  
-  && string.compare("A", c) == order.Lt
-  && string.compare(c, "z") == order.Lt
+  // Note: "A" < "Z" < "a" < "z"
+  string.length(c) == 1 && str_at_most("A", c) && str_at_most(c, "z")
+}
+
+/// Check if `l <= r` for strings `l` and `r`
+fn str_at_most(l, r) -> Bool {
+  list.contains([order.Lt, order.Eq], string.compare(l, r))
 }
 
 fn as_reserved_keyword(str) -> Option(Keyword) {
