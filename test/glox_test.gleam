@@ -5,8 +5,8 @@ import gleam/string
 import gleeunit
 import scanner.{
   type Step, Assignment, AtMost, Comma, Comment, Division, Dot, Equal,
-  GreaterThan, Identifer, LeftBrace, LeftParen, LessThan, Literal, Minus,
-  Negation, Number, Operator, Plus, Punctuation, RightBrace, RightParen,
+  GreaterThan, Identifer, Keyword, LOr, LeftBrace, LeftParen, LessThan, Literal,
+  Minus, Negation, Number, Operator, Plus, Punctuation, RightBrace, RightParen,
   Semicolon, Step, String, Times, Whitespace, parse_number, scan_tokens,
   split_on_identifier, split_on_numeric,
 }
@@ -98,8 +98,7 @@ pub fn scan_tokens_test() {
     == Ok([Operator(Minus, 0), Literal(Number(12.0), 0)])
     as "Negative numbers are not literals, but expressions"
 
-  assert scan_tokens("or", 0) == Ok([Literal(Identifer("or"), 0)])
-    as "Reserved keyword: or"
+  assert scan_tokens("or", 0) == Ok([Keyword(LOr, 0)]) as "Reserved keyword: or"
 
   assert scan_tokens("orchid", 0) == Ok([Literal(Identifer("orchid"), 0)])
     as "Identifier: orchid"

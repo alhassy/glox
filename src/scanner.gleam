@@ -192,15 +192,20 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
       more
       // Do we have a number?
       |> parse_number
-      |> option.to_result(LError("Unexpected character", line))
-      |> result.map(fn(step) {
-        Step(Literal(Number(step.found), line), step.unconsumed)
+      |> option.map(fn(result) {
+        Step(Literal(Number(result.found), line), result.unconsumed)
       })
-      // Or, do we have a reserved keyword or identifier?
-      |> result.lazy_or(fn() {
+      // Or, do we have an identifier, which might be reserved as a keyword of the language.
+      |> option.lazy_or(fn() {
         let #(identifier, more2) = split_on_identifier(more)
-        Ok(Step(Literal(Identifer(identifier), line), more2))
+        {
+          as_reserved_keyword(identifier)
+          |> option.map(Keyword(_, line))
+          |> option.lazy_or(fn() { Some(Literal(Identifer(identifier), line)) })
+          |> option.map(Step(_, more2))
+        }
       })
+      |> option.to_result(LError("Unexpected character", line))
   }
 }
 
@@ -265,4 +270,26 @@ fn is_letter(c: String) -> Bool {
   // Note: "A" < "Z" < "a" < "z"  
   && string.compare("A", c) == order.Lt
   && string.compare(c, "z") == order.Lt
+}
+
+fn as_reserved_keyword(str) -> Option(Keyword) {
+  case str {
+    "var" -> Some(LVar)
+    "true" -> Some(LTrue)
+    "false" -> Some(LFalse)
+    "and" -> Some(LAnd)
+    "or" -> Some(LOr)
+    "if" -> Some(LIf)
+    "else" -> Some(LElse)
+    "while" -> Some(LWhile)
+    "for" -> Some(LFor)
+    "fun" -> Some(LFun)
+    "return" -> Some(LReturn)
+    "class" -> Some(LClass)
+    "this" -> Some(LThis)
+    "super" -> Some(LSuper)
+    "nil" -> Some(LNil)
+    "print" -> Some(LPrint)
+    _ -> None
+  }
 }
