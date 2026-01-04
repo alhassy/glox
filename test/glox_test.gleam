@@ -1,4 +1,3 @@
-import gleam/list
 import gleam/option.{None, Some}
 import gleam/order
 import gleam/string

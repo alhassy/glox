@@ -3,7 +3,6 @@
 import error_handling.{type LError, LError}
 import gleam/bool
 import gleam/list
-import gleam/pair
 
 // Get type & constructor
 import gleam/float
@@ -178,26 +177,20 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
           Ok(Step(Punctuation(Comment, line), more2))
         }
       }
-    "/*" <> more ->
-      case string.contains(more, "*/") {
-        False -> Error(LError("Unterminated multiline comment", line))
-        True -> {
-          let assert Ok(#(_comment, more2)) = string.split_once(more, on: "*/")
-          Ok(Step(Punctuation(Comment, line), more2))
-        }
-      }
+    "/*" <> _more ->
+      parse_delimited("/*", "*/")
+      |> map(fn(_) { Punctuation(Comment, line) })
+      |> fn(f) { f(text) }
+      |> option.to_result(LError("Unterminated multiline comment", line))
     "/" <> more -> Ok(Step(Operator(Division, line), more))
     "*" <> more -> Ok(Step(Operator(Times, line), more))
     "+" <> more -> Ok(Step(Operator(Plus, line), more))
     "-" <> more -> Ok(Step(Operator(Minus, line), more))
-    "\"" <> more ->
-      case string.contains(more, "\"") {
-        False -> Error(LError("Unterminated string", line))
-        True -> {
-          let assert Ok(#(string, more2)) = string.split_once(more, on: "\"")
-          Ok(Step(Literal(String(string), line), more2))
-        }
-      }
+    "\"" <> _more ->
+      parse_delimited("\"", "\"")
+      |> map(fn(s) { Literal(String(s), line) })
+      |> fn(f) { f(text) }
+      |> option.to_result(LError("Unterminated string", line))
     more ->
       more
       // Do we have a number?
@@ -216,6 +209,39 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
         }
       })
       |> option.to_result(LError("Unexpected character", line))
+  }
+}
+
+/// Parse the text between `begin` and `end`, without accounting for nested delimited expressions.
+/// - It finds the smallest possible delimited expression.
+/// - Note: Both `begin` and `end` may be multi-character strings.
+pub fn parse_delimited(begin, end) -> Parser(String) {
+  fn(str) {
+    use Step(_, unconsumed) <- option.then(parse_string(begin)(str))
+    case string.contains(unconsumed, end) {
+      False -> None
+      True -> {
+        let assert Ok(#(body, more)) = string.split_once(unconsumed, on: end)
+        Some(Step(body, more))
+      }
+    }
+  }
+}
+
+/// Parse the literal string `expected`: Get it if possible.
+fn parse_string(expected) -> Parser(String) {
+  fn(input) {
+    use <- bool.guard(
+      when: string.is_empty(expected),
+      return: Some(Step("", input)),
+    )
+    use #(first, rest) <- option.then(
+      expected |> string.pop_grapheme |> option.from_result,
+    )
+    parse_one_char
+    |> filter(fn(c) { c == first })
+    |> and_then(fn(c) { parse_string(rest) |> map(fn(cs) { c <> cs }) })
+    |> fn(f) { f(input) }
   }
 }
 
@@ -278,6 +304,15 @@ fn then(parser: Parser(a), mapper: fn(a) -> Option(b)) -> Parser(b) {
     use Step(a, unconsumed) <- option.then(parser(str))
     use b <- option.then(mapper(a))
     Some(Step(b, unconsumed))
+  }
+}
+
+/// Parse using `parser` then apply `mapper` to the resulting parsed value
+fn and_then(parser: Parser(a), mapper: fn(a) -> Parser(b)) -> Parser(b) {
+  fn(str) {
+    use Step(a, unconsumed) <- option.then(parser(str))
+    use Step(b, unconsumed2) <- option.then(mapper(a)(unconsumed))
+    Some(Step(b, unconsumed2))
   }
 }
 
