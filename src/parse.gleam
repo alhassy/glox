@@ -1,6 +1,6 @@
 import expr
 import gleam/option.{type Option, None, Some}
-import scanner.{type Token}
+import scanner.{type Token, token_to_string}
 
 /// A parser really has two jobs:
 ///
@@ -120,9 +120,11 @@ pub fn expr() -> Parser(Token, expr.Expr) {
 /// Implement grammar rule `unary   →   ( "!" | "-" ) unary  |  primary`
 pub fn unary() -> Parser(Token, expr.Expr) {
   {
-    use op <- get(
-      one_token()
-      |> choose(token_as_expr_unary_op, "Expected a unary op: | , -"),
+    use token <- get(one_token())
+    use op <- unwrap(
+      token_as_expr_unary_op(token),
+      "Expected a unary op `! , -` but unexpectedly saw "
+        <> token_to_string(token),
     )
     use unary <- get(unary())
     return(expr.Unary(op, unary))
@@ -145,20 +147,27 @@ fn token_as_expr_unary_op(t: Token) -> Option(expr.UnaryOp) {
 pub fn primary() -> Parser(Token, expr.Expr) {
   // Do we have a literal expression?
   {
-    one_token()
-    |> choose(
-      token_as_expr_literal,
-      "Expected a literal: Number , String , true , false , nil",
+    use token <- get(one_token())
+    use literal <- unwrap(
+      token_as_expr_literal(token),
+      "Expected a literal `Number , String , true , false , nil`, but saw "
+        <> token_to_string(token),
     )
-    |> map(expr.Literal)
+    return(expr.Literal(literal))
   }
   // Or a parenthesised expression?
   |> or({
     use token <- get(one_token())
-    use <- when(is_left_parens(token), "Expected an open parens")
+    use <- when(
+      is_left_parens(token),
+      "Expected an open parens, but saw " <> token_to_string(token),
+    )
     use expr <- get(expr())
     use token <- get(one_token())
-    use <- when(is_right_parens(token), "Expected a closing parens")
+    use <- when(
+      is_right_parens(token),
+      "Expected a closing parens, but saw " <> token_to_string(token),
+    )
     return(expr.Grouping(expr))
   })
 }
@@ -209,11 +218,13 @@ pub fn binary_expr() -> Parser(Token, expr.Expr) {
 }
 
 pub fn binary_operator() -> Parser(Token, expr.BinaryOp) {
-  one_token()
-  |> choose(
-    token_as_expr_binary_op,
-    "Expected a binary operator:  == , != , < , <= , > , >= , +  , -  , * , /",
+  use token <- get(one_token())
+  use binary_op <- unwrap(
+    token_as_expr_binary_op(token),
+    "Expected a binary operator `== , != , < , <= , > , >= , +  , -  , * , /`, but saw "
+      <> token_to_string(token),
   )
+  return(binary_op)
 }
 
 fn token_as_expr_binary_op(t: Token) -> Option(expr.BinaryOp) {
@@ -281,6 +292,18 @@ fn filter(
   }
 }
 
+// This is essentially `choose` but targeted at making `use`-syntax more readable
+fn unwrap(
+  result: Option(b),
+  failure_message: String,
+  continue: fn(b) -> Parser(token, c),
+) -> Parser(token, c) {
+  case result {
+    None -> fn(_unconsumed) { Error(failure_message) }
+    Some(b) -> continue(b)
+  }
+}
+
 /// Applies a partial map to the result of a parser.
 /// This is essentially both a `filter` and `map`.
 fn choose(
@@ -316,8 +339,13 @@ fn map(
 fn or(main: Parser(a, b), fallback: Parser(a, b)) -> Parser(a, b) {
   fn(tokens) {
     case main(tokens) {
-      // TODO: We probably want to aggregate errors!
-      Error(_) -> fallback(tokens)
+      Error(_) as first_error ->
+        case fallback(tokens) {
+          Error(_) -> first_error
+          // Show first failing message, when everything fails.
+          // 🤔 We probably want to aggregate errors!
+          success -> success
+        }
       success -> success
     }
   }

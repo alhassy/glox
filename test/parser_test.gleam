@@ -24,37 +24,55 @@ pub fn parse_unary_test() {
       ),
       [],
     )
-    as "Parsing  (123)  expr"
+    as "Parsing  -(123)  expr"
+
+  expect_parse_error(
+    parse.expr,
+    "- (123)",
+    "Expected a unary op `! , -` but unexpectedly saw Whitespace",
+  )
+  expect_parse_error(
+    parse.expr,
+    "-+(123)",
+    "Expected a unary op `! , -` but unexpectedly saw +",
+  )
 }
 
 pub fn parse_parenthesised_test() {
-  let assert Ok(tokens) = scan_tokens("(123)", 0)
-  assert tokens
-    == [
-      scanner.Punctuation(scanner.LeftParen, 0),
-      scanner.Literal(scanner.Number(123.0), 0),
-      scanner.Punctuation(scanner.RightParen, 0),
-    ]
-  assert parse.expr()(tokens)
+  assert run(parse.expr, "(123)")
     == parse.Success(expr.Grouping(expr.Literal(expr.Number(123.0))), [])
     as "Parsing  (123)  expr"
 }
 
 pub fn parse_literal_test() {
-  let assert Ok(tokens) = scan_tokens("123", 0)
-  assert parse.expr()(tokens)
+  assert run(parse.primary, "123")
     == parse.Success(expr.Literal(expr.Number(123.0)), [])
     as "Parsing  123  literal"
 
-  let assert Ok(tokens) = scan_tokens("nil", 0)
-  assert parse.expr()(tokens) == parse.Success(expr.Literal(expr.Nil), [])
+  assert run(parse.primary, "nil") == parse.Success(expr.Literal(expr.Nil), [])
     as "Parsing  nil  literal"
 
-  let assert Ok(tokens) = scan_tokens("true", 0)
-  assert tokens == [scanner.Keyword(scanner.LTrue, 0)]
-  assert parse.expr()(tokens)
+  assert run(parse.primary, "true")
     == parse.Success(expr.Literal(expr.Boolean(True)), [])
     as "Parsing  true  literal"
+}
+
+pub fn parse_literal_fails_result_in_informative_messages_test() {
+  expect_parse_error(
+    parse.primary,
+    "apple",
+    "Expected a literal `Number , String , true , false , nil`, but saw identifier `apple`",
+  )
+  expect_parse_error(
+    parse.primary,
+    "*",
+    "Expected a literal `Number , String , true , false , nil`, but saw *",
+  )
+  expect_parse_error(
+    parse.primary,
+    "var x = 123;",
+    "Expected a literal `Number , String , true , false , nil`, but saw keyword `var`",
+  )
 }
 
 pub fn parse_binary_operator_test() {
@@ -62,9 +80,22 @@ pub fn parse_binary_operator_test() {
   assert tokens == [Operator(scanner.AtMost, 0)] as "Scanning at-most operator"
   assert parse.binary_operator()(tokens) == parse.Success(expr.AtMost, [])
     as "scannar.AtMost converts to expr.AtMost"
-  assert parse.binary_operator()([Operator(scanner.Negation, 0)])
-    == parse.Error(
-      "Expected a binary operator:  == , != , < , <= , > , >= , +  , -  , * , /",
-    )
-    as "Unary ops are not binary ops"
+}
+
+pub fn parse_binary_op_fails_result_in_informative_messages_test() {
+  // Unary boolean negation is not a binary operator
+  expect_parse_error(
+    parse.binary_operator,
+    "!",
+    "Expected a binary operator `== , != , < , <= , > , >= , +  , -  , * , /`, but saw !",
+  )
+}
+
+fn expect_parse_error(parser, input, err_msg) {
+  assert run(parser, input) == parse.Error(err_msg)
+}
+
+fn run(parser, input) {
+  let assert Ok(tokens) = scan_tokens(input, 0)
+  parser()(tokens)
 }

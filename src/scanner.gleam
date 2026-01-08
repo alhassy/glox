@@ -388,3 +388,63 @@ fn as_reserved_keyword(str) -> Option(Keyword) {
     _ -> None
   }
 }
+
+pub fn token_to_string(t: Token) -> String {
+  case t {
+    Keyword(lexeme, _) -> {
+      let word = case lexeme {
+        LAnd -> "and"
+        LClass -> "class"
+        LElse -> "else"
+        LFalse -> "false"
+        LFor -> "for"
+        LFun -> "fun"
+        LIf -> "if"
+        LNil -> "nil"
+        LOr -> "or"
+        LPrint -> "print"
+        LReturn -> "return"
+        LSuper -> "super"
+        LThis -> "this"
+        LTrue -> "true"
+        LVar -> "var"
+        LWhile -> "while"
+      }
+      "keyword `" <> word <> "`"
+    }
+    Literal(lexeme, _) ->
+      case lexeme {
+        Identifer(value:) -> "identifier `" <> value <> "`"
+        Number(value:) -> float.to_string(value)
+        String(value:) -> "\"" <> value <> "\""
+      }
+    Operator(lexeme, _) ->
+      case lexeme {
+        AtLeast -> ">="
+        AtMost -> "<="
+        Division -> "/"
+        Equal -> "=="
+        GreaterThan -> ">="
+        LessThan -> "<="
+        Minus -> "-"
+        Negation -> "!"
+        NotEqual -> "!="
+        Plus -> "+"
+        Times -> "*"
+      }
+    Punctuation(lexeme, _) ->
+      case lexeme {
+        Assignment -> "="
+        Comma -> ","
+        Comment -> "//"
+        Dot -> "."
+        EOF -> "EOF"
+        LeftBrace -> "{"
+        LeftParen -> "("
+        RightBrace -> "}"
+        RightParen -> ")"
+        Semicolon -> ";"
+        Whitespace -> "Whitespace"
+      }
+  }
+}
