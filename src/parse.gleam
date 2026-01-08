@@ -99,34 +99,56 @@ fn synchronize() {
 pub type Parser(token, value) =
   fn(List(token)) -> ParseResult(token, value)
 
-/// A Gleam representation of the following grammar.
+/// A Gleam parser for the following grammar.
 /// ```
-/// expression     → literal
-///               | unary
-///               | binary
-///               | grouping ;
-///
-/// literal        → NUMBER | STRING | true | false | nil ;
-/// grouping       → ( expression ) ;
-/// unary          → ( - | ! ) expression ;
-/// binary         → expression operator expression ;
-/// operator       → == | != | < | <= | > | >=
-///                | +  | -  | * | / ;
+/// expression     → equality ;
+/// equality       → comparison ( ( "!=" | "==" ) comparison )* ;
+/// comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+/// term           → factor ( ( "-" | "+" ) factor )* ;
+/// factor         → unary ( ( "/" | "*" ) unary )* ;
+/// unary          → ( "!" | "-" ) unary
+///                | primary ;
+/// primary        → NUMBER | STRING | "true" | "false" | "nil"
+///                | "(" expression ")" ;
 /// ```
-/// 
-/// 
 pub fn expr() -> Parser(Token, expr.Expr) {
-  literal()
+  primary()
   // |> or(binary_expr())
 }
 
-pub fn literal() -> Parser(Token, expr.Expr) {
-  one_token()
-  |> choose(
-    token_as_expr_literal,
-    "Expected a literal: Number , String , true , false , nil",
-  )
-  |> map(expr.Literal)
+pub fn primary() -> Parser(Token, expr.Expr) {
+  // Do we have a literal expression?
+  {
+    one_token()
+    |> choose(
+      token_as_expr_literal,
+      "Expected a literal: Number , String , true , false , nil",
+    )
+    |> map(expr.Literal)
+  }
+  // Or a parenthesised expression?
+  |> or({
+    use token <- get(one_token())
+    use <- when(is_left_parens(token), "Expected an open parens")
+    use expr <- get(expr())
+    use token <- get(one_token())
+    use <- when(is_right_parens(token), "Expected a closing parens")
+    return(expr.Grouping(expr))
+  })
+}
+
+fn is_left_parens(token: Token) -> Bool {
+  case token {
+    scanner.Punctuation(lexeme, _) if lexeme == scanner.LeftParen -> True
+    _ -> False
+  }
+}
+
+fn is_right_parens(token: Token) -> Bool {
+  case token {
+    scanner.Punctuation(lexeme, _) if lexeme == scanner.RightParen -> True
+    _ -> False
+  }
 }
 
 fn token_as_expr_literal(t: Token) -> Option(expr.Literal) {
@@ -148,8 +170,16 @@ fn token_as_expr_literal(t: Token) -> Option(expr.Literal) {
   }
 }
 
+///  😁 Notice that using Parsing Combinator, the parser looks almost identical to the associated grammar rule!
+/// ```
+/// binary  → expression operator expression
+/// ```
 pub fn binary_expr() -> Parser(Token, expr.Expr) {
-  todo
+  use first <- get(expr())
+  // ⚠️ This is an immediate recurisve call! This will be a stackoverflow! Left recursion!
+  use bop <- get(binary_operator())
+  use second <- get(expr())
+  return(expr.Binary(bop, first, second))
 }
 
 pub fn binary_operator() -> Parser(Token, expr.BinaryOp) {
@@ -190,6 +220,24 @@ fn one_token() -> Parser(Token, Token) {
   }
 }
 
+/// The parser that always succeeds and returns the given `token`
+fn return(found) -> Parser(token, value) {
+  fn(unconsumed) { Success(found, unconsumed) }
+}
+
+/// This is essentially `filter` but aimed at `use`-syntax.
+/// ### Example: `filter(p, f, msg) == { use x <- p; use <- when(f(x), msg); return(x) }
+fn when(
+  condition: Bool,
+  message: String,
+  continue: fn() -> Parser(token, value),
+) -> Parser(token, value) {
+  case condition {
+    True -> continue()
+    False -> fn(_unconsumed) { Error(message) }
+  }
+}
+
 fn filter(
   parser: Parser(token, value),
   predicate: fn(value) -> Bool,
@@ -197,12 +245,12 @@ fn filter(
 ) -> Parser(token, value) {
   fn(tokens) {
     case parser(tokens) {
-      err -> err
-      Success(found:, unconsumed:) as done ->
+      Success(found, _) as done ->
         case predicate(found) {
           True -> done
           False -> Error(failure_message)
         }
+      err -> err
     }
   }
 }
@@ -247,4 +295,22 @@ fn or(main: Parser(a, b), fallback: Parser(a, b)) -> Parser(a, b) {
       success -> success
     }
   }
+}
+
+/// Parser an `a`-value then execute a parser-producing callback to obtain a `b`-value.
+fn then(
+  first: Parser(token, a),
+  then: fn(a) -> Parser(token, b),
+) -> Parser(token, b) {
+  fn(tokens) {
+    case first(tokens) {
+      Error(message) -> Error(message)
+      Success(found, unconsumed) -> then(found)(unconsumed)
+    }
+  }
+}
+
+/// An alias for `then` that makes code involving `use` more readable
+fn get(first, callback) {
+  then(first, callback)
 }
