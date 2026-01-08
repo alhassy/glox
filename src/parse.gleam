@@ -115,6 +115,43 @@ pub type Parser(token, value) =
 /// ```
 /// 
 /// 
+pub fn expr() -> Parser(Token, expr.Expr) {
+  literal()
+  // |> or(binary_expr())
+}
+
+pub fn literal() -> Parser(Token, expr.Expr) {
+  one_token()
+  |> choose(
+    token_as_expr_literal,
+    "Expected a literal: Number , String , true , false , nil",
+  )
+  |> map(expr.Literal)
+}
+
+fn token_as_expr_literal(t: Token) -> Option(expr.Literal) {
+  case t {
+    scanner.Literal(lexeme, _) ->
+      case lexeme {
+        scanner.Number(value) -> value |> expr.Number |> Some
+        scanner.String(value) -> value |> expr.String |> Some
+        scanner.Identifer(_) -> None
+      }
+    scanner.Keyword(lexeme, _) ->
+      case lexeme {
+        scanner.LNil -> expr.Nil |> Some
+        scanner.LTrue -> True |> expr.Boolean |> Some
+        scanner.LFalse -> False |> expr.Boolean |> Some
+        _ -> None
+      }
+    _ -> None
+  }
+}
+
+pub fn binary_expr() -> Parser(Token, expr.Expr) {
+  todo
+}
+
 pub fn binary_operator() -> Parser(Token, expr.BinaryOp) {
   one_token()
   |> choose(
@@ -170,6 +207,8 @@ fn filter(
   }
 }
 
+/// Applies a partial map to the result of a parser.
+/// This is essentially both a `filter` and `map`.
 fn choose(
   parser: Parser(token, value_a),
   selector: fn(value_a) -> Option(value_b),
@@ -183,6 +222,29 @@ fn choose(
           Some(b) -> Success(b, unconsumed)
           None -> Error(failure_message)
         }
+    }
+  }
+}
+
+fn map(
+  parser: Parser(token, value_a),
+  mapper: fn(value_a) -> value_b,
+) -> Parser(token, value_b) {
+  fn(tokens) {
+    case parser(tokens) {
+      Error(msg) -> Error(msg)
+      Success(found, unconsumed) -> Success(mapper(found), unconsumed)
+    }
+  }
+}
+
+/// Run the `main` parser but if it fails then run the `fallback` parser.
+fn or(main: Parser(a, b), fallback: Parser(a, b)) -> Parser(a, b) {
+  fn(tokens) {
+    case main(tokens) {
+      // TODO: We probably want to aggregate errors!
+      Error(_) -> fallback(tokens)
+      success -> success
     }
   }
 }
