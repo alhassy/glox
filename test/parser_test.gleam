@@ -7,6 +7,26 @@ pub fn main() -> Nil {
   gleeunit.main()
 }
 
+pub fn parse_unary_test() {
+  let assert Ok(tokens) = scan_tokens("-(123)", 0)
+  assert tokens
+    == [
+      Operator(scanner.Minus, 0),
+      scanner.Punctuation(scanner.LeftParen, 0),
+      scanner.Literal(scanner.Number(123.0), 0),
+      scanner.Punctuation(scanner.RightParen, 0),
+    ]
+  assert parse.expr()(tokens)
+    == parse.Success(
+      expr.Unary(
+        expr.NumericNegation,
+        expr.Grouping(expr.Literal(expr.Number(123.0))),
+      ),
+      [],
+    )
+    as "Parsing  (123)  expr"
+}
+
 pub fn parse_parenthesised_test() {
   let assert Ok(tokens) = scan_tokens("(123)", 0)
   assert tokens

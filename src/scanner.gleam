@@ -74,9 +74,11 @@ pub type Punctuation {
 pub type Operator {
   Plus
   Minus
+  // Used as a binary operator "x - y" and numeric negation "-x"
   Times
   Division
   Negation
+  // Boolean negation, "!"
   Equal
   NotEqual
   LessThan

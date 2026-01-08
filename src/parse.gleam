@@ -54,7 +54,8 @@ pub type ParseResult(token, value) {
   /// and we don’t need to synchronize. In those places, we simply report the error and keep on truckin’.
   Error(
     // line: Int,
-    // token: token,
+    // If we have a token in-hand, but it's not what we expect, then let's report it in the erorr message
+    //  while_looking_at: Option(token),
     message: String,
   )
 }
@@ -112,8 +113,33 @@ pub type Parser(token, value) =
 ///                | "(" expression ")" ;
 /// ```
 pub fn expr() -> Parser(Token, expr.Expr) {
-  primary()
+  unary()
   // |> or(binary_expr())
+}
+
+/// Implement grammar rule `unary   →   ( "!" | "-" ) unary  |  primary`
+pub fn unary() -> Parser(Token, expr.Expr) {
+  {
+    use op <- get(
+      one_token()
+      |> choose(token_as_expr_unary_op, "Expected a unary op: | , -"),
+    )
+    use unary <- get(unary())
+    return(expr.Unary(op, unary))
+  }
+  |> or(primary())
+}
+
+fn token_as_expr_unary_op(t: Token) -> Option(expr.UnaryOp) {
+  case t {
+    scanner.Operator(lexeme, _) ->
+      case lexeme {
+        scanner.Negation -> expr.BooleanNegation |> Some
+        scanner.Minus -> expr.NumericNegation |> Some
+        _ -> None
+      }
+    _ -> None
+  }
 }
 
 pub fn primary() -> Parser(Token, expr.Expr) {
@@ -198,14 +224,14 @@ fn token_as_expr_binary_op(t: Token) -> Option(expr.BinaryOp) {
         scanner.AtMost -> Some(expr.AtMost)
         scanner.Division -> Some(expr.Divides)
         scanner.Equal -> Some(expr.Equals)
+        scanner.NotEqual -> Some(expr.NotEquals)
         scanner.GreaterThan -> Some(expr.GreaterThan)
         scanner.LessThan -> Some(expr.LessThan)
         scanner.Minus -> Some(expr.Minus)
         scanner.Plus -> Some(expr.Plus)
         scanner.Times -> Some(expr.Times)
-        // Unary operators
+        // Unary operator
         scanner.Negation -> None
-        scanner.NotEqual -> None
       }
     _ -> None
   }
