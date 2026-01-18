@@ -1,8 +1,7 @@
 import expr
 import gleam
 import gleam/option.{type Option, None, Some}
-import gleam/result
-import scanner.{type Token, token_to_string}
+import scanner.{type Token, token_to_string} as s
 
 /// A parser really has two jobs:
 ///
@@ -142,8 +141,8 @@ pub fn unary() -> Parser(Token, expr.Expr) {
 
 fn token_as_expr_unary_op(it: Token) -> Result(expr.UnaryOp, String) {
   case it {
-    scanner.Operator(scanner.Negation, _) -> expr.BooleanNegation |> Some
-    scanner.Operator(scanner.Minus, _) -> expr.NumericNegation |> Some
+    s.Operator(s.Negation, _) -> expr.BooleanNegation |> Some
+    s.Operator(s.Minus, _) -> expr.NumericNegation |> Some
     _ -> None
   }
   |> expecting(it, to_be: "a unary op `! , -`")
@@ -169,25 +168,25 @@ pub fn primary() -> Parser(Token, expr.Expr) {
 
 fn is_left_parens(token: Token) -> Bool {
   case token {
-    scanner.Punctuation(lexeme, _) if lexeme == scanner.LeftParen -> True
+    s.Punctuation(lexeme, _) if lexeme == s.LeftParen -> True
     _ -> False
   }
 }
 
 fn is_right_parens(token: Token) -> Bool {
   case token {
-    scanner.Punctuation(lexeme, _) if lexeme == scanner.RightParen -> True
+    s.Punctuation(lexeme, _) if lexeme == s.RightParen -> True
     _ -> False
   }
 }
 
 fn token_as_expr_literal(it: Token) -> Result(expr.Literal, String) {
   case it {
-    scanner.Literal(scanner.Number(value), _) -> value |> expr.Number |> Some
-    scanner.Literal(scanner.String(value), _) -> value |> expr.String |> Some
-    scanner.Keyword(scanner.LNil, _) -> expr.Nil |> Some
-    scanner.Keyword(scanner.LTrue, _) -> True |> expr.Boolean |> Some
-    scanner.Keyword(scanner.LFalse, _) -> False |> expr.Boolean |> Some
+    s.Literal(s.Number(value), _) -> value |> expr.Number |> Some
+    s.Literal(s.String(value), _) -> value |> expr.String |> Some
+    s.Keyword(s.LNil, _) -> expr.Nil |> Some
+    s.Keyword(s.LTrue, _) -> True |> expr.Boolean |> Some
+    s.Keyword(s.LFalse, _) -> False |> expr.Boolean |> Some
     _ -> None
   }
   |> expecting(it, to_be: "a literal `Number , String , true , false , nil`")
@@ -213,20 +212,20 @@ pub fn binary_operator() -> Parser(Token, expr.BinaryOp) {
 
 fn token_as_expr_binary_op(it: Token) -> Result(expr.BinaryOp, String) {
   case it {
-    scanner.Operator(lexeme, _) ->
+    s.Operator(lexeme, _) ->
       case lexeme {
-        scanner.AtLeast -> Some(expr.AtLeast)
-        scanner.AtMost -> Some(expr.AtMost)
-        scanner.Division -> Some(expr.Divides)
-        scanner.Equal -> Some(expr.Equals)
-        scanner.NotEqual -> Some(expr.NotEquals)
-        scanner.GreaterThan -> Some(expr.GreaterThan)
-        scanner.LessThan -> Some(expr.LessThan)
-        scanner.Minus -> Some(expr.Minus)
-        scanner.Plus -> Some(expr.Plus)
-        scanner.Times -> Some(expr.Times)
+        s.AtLeast -> Some(expr.AtLeast)
+        s.AtMost -> Some(expr.AtMost)
+        s.Division -> Some(expr.Divides)
+        s.Equal -> Some(expr.Equals)
+        s.NotEqual -> Some(expr.NotEquals)
+        s.GreaterThan -> Some(expr.GreaterThan)
+        s.LessThan -> Some(expr.LessThan)
+        s.Minus -> Some(expr.Minus)
+        s.Plus -> Some(expr.Plus)
+        s.Times -> Some(expr.Times)
         // Unary operator
-        scanner.Negation -> None
+        s.Negation -> None
       }
     _ -> None
   }
