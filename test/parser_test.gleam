@@ -147,22 +147,6 @@ pub fn parse_literal_fails_result_in_informative_messages_test() {
   )
 }
 
-pub fn parse_binary_operator_test() {
-  let assert Ok(tokens) = scan_tokens("<=", 0)
-  assert tokens == [Operator(scanner.AtMost, 0)] as "Scanning at-most operator"
-  assert parse.binary_operator()(tokens) == parse.Success(expr.AtMost, [])
-    as "scannar.AtMost converts to expr.AtMost"
-}
-
-pub fn parse_binary_op_fails_result_in_informative_messages_test() {
-  // Unary boolean negation is not a binary operator
-  expect_parse_error(
-    parse.binary_operator,
-    "!",
-    "Expected a binary operator `== , != , < , <= , > , >= , +  , -  , * , /` but saw !",
-  )
-}
-
 fn expect_parse_error(parser, input, err_msg) {
   assert run(parser, input) == parse.Error(err_msg)
 }

@@ -310,49 +310,6 @@ fn token_as_expr_literal(it: Token) -> Result(expr.Literal, String) {
   |> expecting(it, to_be: "a literal `Number , String , true , false , nil`")
 }
 
-///  😁 Notice that using Parsing Combinator, the parser looks almost identical to the associated grammar rule!
-/// ```
-/// binary  → expression operator expression
-/// ```
-pub fn binary_expr() -> Parser(Token, expr.Expr) {
-  use first <- get(expr())
-  // ⚠️ This is an immediate recurisve call! This will be a stackoverflow! Left recursion!
-  use bop <- get(binary_operator())
-  use second <- get(expr())
-  return(expr.Binary(bop, first, second))
-}
-
-pub fn binary_operator() -> Parser(Token, expr.BinaryOp) {
-  use token <- get(one_token())
-  use binary_op <- unwrap_result(token_as_expr_binary_op(token))
-  return(binary_op)
-}
-
-fn token_as_expr_binary_op(it: Token) -> Result(expr.BinaryOp, String) {
-  case it {
-    s.Operator(lexeme, _) ->
-      case lexeme {
-        s.AtLeast -> Some(expr.AtLeast)
-        s.AtMost -> Some(expr.AtMost)
-        s.Division -> Some(expr.Divides)
-        s.Equal -> Some(expr.Equals)
-        s.NotEqual -> Some(expr.NotEquals)
-        s.GreaterThan -> Some(expr.GreaterThan)
-        s.LessThan -> Some(expr.LessThan)
-        s.Minus -> Some(expr.Minus)
-        s.Plus -> Some(expr.Plus)
-        s.Times -> Some(expr.Times)
-        // Unary operator
-        s.Negation -> None
-      }
-    _ -> None
-  }
-  |> expecting(
-    it,
-    to_be: "a binary operator `== , != , < , <= , > , >= , +  , -  , * , /`",
-  )
-}
-
 fn one_token() -> Parser(Token, Token) {
   fn(tokens) {
     case tokens {
