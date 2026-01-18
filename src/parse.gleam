@@ -132,33 +132,46 @@ pub fn expr() -> Parser(Token, expr.Expr) {
 
 /// term           → factor ( ( "-" | "+" ) factor )* ;
 pub fn term() -> Parser(Token, Expr) {
-  use left <- get(factor())
-  use continuations: List(fn(Expr) -> Expr) <- get(
-    {
-      use bop <- get(one_token() |> choose(token_as_minus_or_plus))
-      use right <- get(factor())
-      return(fn(l) { expr.Binary(bop, l, right) })
-    }
-    |> star,
+  many_with_seperator(
+    value_parser: factor(),
+    seperator_parser: one_token() |> choose(token_as_minus_or_plus),
+    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
   )
-  return(compose(continuations)(left))
 }
 
 /// Implement grammar rule `factor         → unary ( ( "/" | "*" ) unary )* `
 pub fn factor() -> Parser(Token, Expr) {
-  use left <- get(unary())
-  use continuations: List(fn(Expr) -> Expr) <- get(
+  many_with_seperator(
+    value_parser: unary(),
+    seperator_parser: one_token() |> choose(token_as_div_or_mult),
+    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
+  )
+}
+
+/// Implement the grammar rule `value (seperator value)*`
+/// then combine the results via `combiner`.
+/// ### Examples
+/// + Commas: `1, 2, 3`
+/// + Terms:  `1 + 2 + 3`
+/// + Terms:  `1 + 2 - 3`, the separator parser parses `+` or `-`
+fn many_with_seperator(
+  value_parser value_parser: Parser(token, value),
+  seperator_parser seperator_parser: Parser(token, seperator),
+  combiner combiner: fn(value, seperator, value) -> value,
+) {
+  use left <- get(value_parser)
+  use continuations: List(fn(value) -> value) <- get(
     {
-      use bop <- get(one_token() |> choose(token_as_div_or_mult))
-      use right <- get(unary())
-      return(fn(l) { expr.Binary(bop, l, right) })
+      use sep <- get(seperator_parser)
+      use right <- get(value_parser)
+      return(fn(l) { combiner(l, sep, right) })
     }
     |> star,
   )
   return(compose(continuations)(left))
 }
 
-fn compose(functions: List(fn(Expr) -> Expr)) -> fn(Expr) -> Expr {
+fn compose(functions: List(fn(t) -> t)) -> fn(t) -> t {
   case functions {
     [] -> fn(e) { e }
     [f, ..fs] -> fn(e) { e |> f |> compose(fs) }
