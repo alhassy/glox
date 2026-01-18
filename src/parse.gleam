@@ -127,18 +127,15 @@ pub fn expr() -> Parser(Token, expr.Expr) {
 pub fn unary() -> Parser(Token, expr.Expr) {
   {
     use token <- get(one_token())
-    use op <- unwrap(
-      token_as_expr_unary_op(token),
-      unexpected_token_error("a unary op `! , -`", token),
-    )
+    use op <- unwrap_result(token_as_expr_unary_op(token))
     use unary <- get(unary())
     return(expr.Unary(op, unary))
   }
   |> or(primary())
 }
 
-fn token_as_expr_unary_op(t: Token) -> Option(expr.UnaryOp) {
-  case t {
+fn token_as_expr_unary_op(it: Token) -> Result(expr.UnaryOp, String) {
+  case it {
     scanner.Operator(lexeme, _) ->
       case lexeme {
         scanner.Negation -> expr.BooleanNegation |> Some
@@ -147,6 +144,7 @@ fn token_as_expr_unary_op(t: Token) -> Option(expr.UnaryOp) {
       }
     _ -> None
   }
+  |> option.to_result(unexpected_token_error("a unary op `! , -`", it))
 }
 
 pub fn primary() -> Parser(Token, expr.Expr) {
@@ -315,7 +313,7 @@ fn unwrap(
 
 // This is essentially `choose` but targeted at making `use`-syntax more readable
 // This is essentially `get` but targetted at `Result` values!
-fn unwrap_r(
+fn unwrap_result(
   result: Result(b, String),
   continue: fn(b) -> Parser(token, c),
 ) -> Parser(token, c) {
