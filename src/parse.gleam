@@ -130,7 +130,16 @@ pub fn expr() -> Parser(Token, expr.Expr) {
   term()
 }
 
-/// term           → factor ( ( "-" | "+" ) factor )* ;
+/// Implement grammar rule  `comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;`
+pub fn comparison() -> Parser(Token, Expr) {
+  many_with_seperator(
+    value_parser: term(),
+    seperator_parser: one_token() |> choose(token_as_comparison),
+    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
+  )
+}
+
+/// Implement grammar rule `term           → factor ( ( "-" | "+" ) factor )* ;`
 pub fn term() -> Parser(Token, Expr) {
   many_with_seperator(
     value_parser: factor(),
@@ -209,6 +218,17 @@ fn token_as_minus_or_plus(it: Token) -> Result(expr.BinaryOp, String) {
     _ -> None
   }
   |> expecting(it, to_be: "the binary operator `-` or `+`")
+}
+
+fn token_as_comparison(it: Token) -> Result(expr.BinaryOp, String) {
+  case it {
+    s.Operator(s.LessThan, _) -> Some(expr.LessThan)
+    s.Operator(s.AtMost, _) -> Some(expr.AtMost)
+    s.Operator(s.GreaterThan, _) -> Some(expr.GreaterThan)
+    s.Operator(s.AtLeast, _) -> Some(expr.AtLeast)
+    _ -> None
+  }
+  |> expecting(it, to_be: "a comparison operator `>, >=, <, <=`")
 }
 
 /// Implement grammar rule `unary   →   ( "!" | "-" ) unary  |  primary`

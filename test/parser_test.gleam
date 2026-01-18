@@ -1,10 +1,28 @@
-import expr.{Binary, Divides, Grouping, Literal, Minus, Number, Plus, Times}
+import expr.{
+  AtMost, Binary, Divides, Grouping, Literal, Minus, Number, Plus, Times,
+}
 import gleeunit
 import parse.{Success}
 import scanner.{Operator, scan_tokens}
 
 pub fn main() -> Nil {
   gleeunit.main()
+}
+
+pub fn parse_comparison_test() {
+  assert run(parse.comparison, "1 * 2 <= 3 / 4 + 5")
+    == Success(
+      Binary(
+        AtMost,
+        Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
+        Binary(
+          Plus,
+          Binary(Divides, Literal(Number(3.0)), Literal(Number(4.0))),
+          Literal(Number(5.0)),
+        ),
+      ),
+      [],
+    )
 }
 
 pub fn parse_term_test() {
