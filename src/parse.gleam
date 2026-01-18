@@ -127,8 +127,21 @@ fn expected(to_be expected: String, it token: Token) -> String {
 ///                | "(" expression ")" ;
 /// ```
 pub fn expr() -> Parser(Token, expr.Expr) {
-  unary()
-  |> or(factor())
+  term()
+}
+
+/// term           → factor ( ( "-" | "+" ) factor )* ;
+pub fn term() -> Parser(Token, Expr) {
+  use left <- get(factor())
+  use continuations: List(fn(Expr) -> Expr) <- get(
+    {
+      use bop <- get(one_token() |> choose(token_as_minus_or_plus))
+      use right <- get(factor())
+      return(fn(l) { expr.Binary(bop, l, right) })
+    }
+    |> star,
+  )
+  return(compose(continuations)(left))
 }
 
 /// Implement grammar rule `factor         → unary ( ( "/" | "*" ) unary )* `
@@ -153,7 +166,7 @@ fn compose(functions: List(fn(Expr) -> Expr)) -> fn(Expr) -> Expr {
 }
 
 /// Parses the largest prefix (of the input token stream) that is parserable by `parser`.
-/// *This parser never fails*
+/// **This parser never fails!**
 fn star(parser: Parser(token, value)) -> Parser(token, List(value)) {
   fn(tokens) {
     case parser(tokens) {
@@ -174,6 +187,15 @@ fn token_as_div_or_mult(it: Token) -> Result(expr.BinaryOp, String) {
     _ -> None
   }
   |> expecting(it, to_be: "the binary operator `/` or `*`")
+}
+
+fn token_as_minus_or_plus(it: Token) -> Result(expr.BinaryOp, String) {
+  case it {
+    s.Operator(s.Minus, _) -> Some(expr.Minus)
+    s.Operator(s.Plus, _) -> Some(expr.Plus)
+    _ -> None
+  }
+  |> expecting(it, to_be: "the binary operator `-` or `+`")
 }
 
 /// Implement grammar rule `unary   →   ( "!" | "-" ) unary  |  primary`

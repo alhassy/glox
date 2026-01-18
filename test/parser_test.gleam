@@ -1,10 +1,26 @@
-import expr.{Binary, Divides, Grouping, Literal, Number, Times}
+import expr.{Binary, Divides, Grouping, Literal, Minus, Number, Plus, Times}
 import gleeunit
 import parse.{Success}
 import scanner.{Operator, scan_tokens}
 
 pub fn main() -> Nil {
   gleeunit.main()
+}
+
+pub fn parse_term_test() {
+  assert run(parse.term, "1 * 2 - 3 / 4 + 5")
+    == Success(
+      Binary(
+        Plus,
+        Binary(
+          Minus,
+          Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
+          Binary(Divides, Literal(Number(3.0)), Literal(Number(4.0))),
+        ),
+        Literal(Number(5.0)),
+      ),
+      [],
+    )
 }
 
 pub fn parse_factor_test() {
