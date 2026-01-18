@@ -104,8 +104,8 @@ pub type Parser(token, value) =
 
 fn expecting(
   option: Option(value),
-  to_be expectation: String,
   it token: Token,
+  to_be expectation: String,
 ) -> Result(value, String) {
   option
   |> option.to_result(expected(it: token, to_be: expectation))
@@ -134,23 +134,16 @@ pub fn expr() -> Parser(Token, expr.Expr) {
 
 /// Implement grammar rule `unary   →   ( "!" | "-" ) unary  |  primary`
 pub fn unary() -> Parser(Token, expr.Expr) {
-  {
-    use token <- get(one_token())
-    use op <- unwrap_result(token_as_expr_unary_op(token))
-    use unary <- get(unary())
-    return(expr.Unary(op, unary))
-  }
+  one_token()
+  |> choose(token_as_expr_unary_op)
+  |> then(fn(op) { unary() |> map(expr.Unary(op, _)) })
   |> or(primary())
 }
 
 fn token_as_expr_unary_op(it: Token) -> Result(expr.UnaryOp, String) {
   case it {
-    scanner.Operator(lexeme, _) ->
-      case lexeme {
-        scanner.Negation -> expr.BooleanNegation |> Some
-        scanner.Minus -> expr.NumericNegation |> Some
-        _ -> None
-      }
+    scanner.Operator(scanner.Negation, _) -> expr.BooleanNegation |> Some
+    scanner.Operator(scanner.Minus, _) -> expr.NumericNegation |> Some
     _ -> None
   }
   |> expecting(it, to_be: "a unary op `! , -`")
@@ -190,19 +183,11 @@ fn is_right_parens(token: Token) -> Bool {
 
 fn token_as_expr_literal(it: Token) -> Result(expr.Literal, String) {
   case it {
-    scanner.Literal(lexeme, _) ->
-      case lexeme {
-        scanner.Number(value) -> value |> expr.Number |> Some
-        scanner.String(value) -> value |> expr.String |> Some
-        scanner.Identifer(_) -> None
-      }
-    scanner.Keyword(lexeme, _) ->
-      case lexeme {
-        scanner.LNil -> expr.Nil |> Some
-        scanner.LTrue -> True |> expr.Boolean |> Some
-        scanner.LFalse -> False |> expr.Boolean |> Some
-        _ -> None
-      }
+    scanner.Literal(scanner.Number(value), _) -> value |> expr.Number |> Some
+    scanner.Literal(scanner.String(value), _) -> value |> expr.String |> Some
+    scanner.Keyword(scanner.LNil, _) -> expr.Nil |> Some
+    scanner.Keyword(scanner.LTrue, _) -> True |> expr.Boolean |> Some
+    scanner.Keyword(scanner.LFalse, _) -> False |> expr.Boolean |> Some
     _ -> None
   }
   |> expecting(it, to_be: "a literal `Number , String , true , false , nil`")
