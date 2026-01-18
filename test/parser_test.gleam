@@ -1,10 +1,36 @@
-import expr
+import expr.{Binary, Divides, Grouping, Literal, Number, Times}
 import gleeunit
-import parse
+import parse.{Success}
 import scanner.{Operator, scan_tokens}
 
 pub fn main() -> Nil {
   gleeunit.main()
+}
+
+pub fn parse_factor_test() {
+  assert run(parse.factor, "(123)")
+    == Success(Grouping(Literal(Number(123.0))), [])
+  assert run(parse.factor, "(123)*4")
+    == Success(
+      Binary(Times, Grouping(Literal(Number(123.0))), Literal(Number(4.0))),
+      [],
+    )
+  let one_times_two_div_3_times_4 =
+    Success(
+      Binary(
+        Times,
+        Binary(
+          Divides,
+          Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
+          Literal(Number(3.0)),
+        ),
+        Literal(Number(4.0)),
+      ),
+      [],
+    )
+  assert run(parse.factor, "1*2/3*4") == one_times_two_div_3_times_4
+  // Whitespace don't matter 🥳
+  assert run(parse.factor, "1 * 2  /3* 4") == one_times_two_div_3_times_4
 }
 
 pub fn parse_unary_test() {
@@ -26,11 +52,6 @@ pub fn parse_unary_test() {
     )
     as "Parsing  -(123)  expr"
 
-  expect_parse_error(
-    parse.expr,
-    "- (123)",
-    "Expected a unary op `! , -` but saw Whitespace",
-  )
   expect_parse_error(
     parse.expr,
     "-+(123)",

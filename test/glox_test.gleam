@@ -6,8 +6,7 @@ import scanner.{
   type Step, Assignment, AtMost, Comma, Comment, Division, Dot, Equal,
   GreaterThan, Identifer, Keyword, LOr, LeftBrace, LeftParen, LessThan, Literal,
   Minus, Negation, Number, Operator, Plus, Punctuation, RightBrace, RightParen,
-  Semicolon, Step, String, Times, Whitespace, parse_identifier, parse_number,
-  scan_tokens,
+  Semicolon, Step, String, Times, parse_identifier, parse_number, scan_tokens,
 }
 
 pub fn main() -> Nil {
@@ -42,11 +41,8 @@ pub fn scan_tokens_test() {
       Punctuation(Assignment, 0),
       Operator(LessThan, 0),
       Operator(GreaterThan, 0),
-      Punctuation(Whitespace, 0),
       Operator(AtMost, 0),
-      Punctuation(Whitespace, 0),
       Operator(Equal, 0),
-      Punctuation(Whitespace, 0),
       Punctuation(Comment, 0),
     ])
     as "Operators can be scanned"
@@ -55,12 +51,10 @@ pub fn scan_tokens_test() {
     == Ok([
       Punctuation(LeftParen, 0),
       Punctuation(LeftParen, 0),
-      Punctuation(Whitespace, 0),
       Punctuation(RightParen, 0),
       Punctuation(RightParen, 0),
       Punctuation(LeftBrace, 0),
       Punctuation(RightBrace, 0),
-      Punctuation(Whitespace, 0),
       Punctuation(Comment, 0),
     ])
     as "Grouping punctuation can be scanned"
@@ -68,22 +62,22 @@ pub fn scan_tokens_test() {
   assert scan_tokens("1 /* wahid in Arabic */ * 2 /* deux in French */", 0)
     == Ok([
       Literal(Number(1.0), 0),
-      Punctuation(Whitespace, 0),
+
       Punctuation(Comment, 0),
-      Punctuation(Whitespace, 0),
+
       Operator(Times, 0),
-      Punctuation(Whitespace, 0),
+
       Literal(Number(2.0), 0),
-      Punctuation(Whitespace, 0),
+
       Punctuation(Comment, 0),
     ])
 
   assert scan_tokens("\"Hello\" + \"World\"", 0)
     == Ok([
       Literal(String("Hello"), 0),
-      Punctuation(Whitespace, 0),
+
       Operator(Plus, 0),
-      Punctuation(Whitespace, 0),
+
       Literal(String("World"), 0),
     ])
     as "String literals can be scanned"
@@ -91,9 +85,7 @@ pub fn scan_tokens_test() {
   assert scan_tokens("12 + 4", 0)
     == Ok([
       Literal(Number(12.0), 0),
-      Punctuation(Whitespace, 0),
       Operator(Plus, 0),
-      Punctuation(Whitespace, 0),
       Literal(Number(4.0), 0),
     ])
     as "Numbers can be scanned"

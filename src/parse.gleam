@@ -1,4 +1,4 @@
-import expr
+import expr.{type Expr}
 import gleam
 import gleam/option.{type Option, None, Some}
 import scanner.{type Token, token_to_string} as s
@@ -128,7 +128,52 @@ fn expected(to_be expected: String, it token: Token) -> String {
 /// ```
 pub fn expr() -> Parser(Token, expr.Expr) {
   unary()
-  // |> or(binary_expr())
+  |> or(factor())
+}
+
+/// Implement grammar rule `factor         → unary ( ( "/" | "*" ) unary )* `
+pub fn factor() -> Parser(Token, Expr) {
+  use left <- get(unary())
+  use continuations: List(fn(Expr) -> Expr) <- get(
+    {
+      use bop <- get(one_token() |> choose(token_as_div_or_mult))
+      use right <- get(unary())
+      return(fn(l) { expr.Binary(bop, l, right) })
+    }
+    |> star,
+  )
+  return(compose(continuations)(left))
+}
+
+fn compose(functions: List(fn(Expr) -> Expr)) -> fn(Expr) -> Expr {
+  case functions {
+    [] -> fn(e) { e }
+    [f, ..fs] -> fn(e) { e |> f |> compose(fs) }
+  }
+}
+
+/// Parses the largest prefix (of the input token stream) that is parserable by `parser`.
+/// *This parser never fails*
+fn star(parser: Parser(token, value)) -> Parser(token, List(value)) {
+  fn(tokens) {
+    case parser(tokens) {
+      Error(_) -> Success(found: [], unconsumed: tokens)
+      Success(v, unconsumed:) ->
+        case star(parser)(unconsumed) {
+          Error(_) -> Success([v], unconsumed)
+          Success(vs, unconsumed:) -> Success([v, ..vs], unconsumed)
+        }
+    }
+  }
+}
+
+fn token_as_div_or_mult(it: Token) -> Result(expr.BinaryOp, String) {
+  case it {
+    s.Operator(s.Division, _) -> Some(expr.Divides)
+    s.Operator(s.Times, _) -> Some(expr.Times)
+    _ -> None
+  }
+  |> expecting(it, to_be: "the binary operator `/` or `*`")
 }
 
 /// Implement grammar rule `unary   →   ( "!" | "-" ) unary  |  primary`
@@ -168,14 +213,14 @@ pub fn primary() -> Parser(Token, expr.Expr) {
 
 fn is_left_parens(token: Token) -> Bool {
   case token {
-    s.Punctuation(lexeme, _) if lexeme == s.LeftParen -> True
+    s.Punctuation(s.LeftParen, _) -> True
     _ -> False
   }
 }
 
 fn is_right_parens(token: Token) -> Bool {
   case token {
-    s.Punctuation(lexeme, _) if lexeme == s.RightParen -> True
+    s.Punctuation(s.RightParen, _) -> True
     _ -> False
   }
 }

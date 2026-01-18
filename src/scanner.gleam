@@ -127,7 +127,14 @@ pub fn scan_tokens(source: String, line: Int) -> Result(List(Token), LError) {
     "" -> Ok([])
     _ -> scan_tokens(unconsumed_source, line)
   })
+  let discard_whitespace = fn(t) {
+    case t {
+      Punctuation(Whitespace, _) -> False
+      _ -> True
+    }
+  }
   [token, ..tokens]
+  |> list.filter(discard_whitespace)
 }
 
 /// Denotes the result of parsing a single item of type `t`
@@ -341,6 +348,7 @@ fn such_that(parser, relation) -> Parser(t) {
 /// Parses the largest prefix of a string that is parserable by `parser`
 fn star(parser: Parser(t)) -> Parser(List(t)) {
   fn(str) {
+    // 🚫 Using `option.then` is wrong!  *This parser should never fail! See parser.gleam for the correct implementation*
     use Step(t, unconsumed) <- option.then(parser(str))
     unconsumed
     |> star(parser)
