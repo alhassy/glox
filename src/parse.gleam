@@ -1,5 +1,7 @@
 import expr
+import gleam
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import scanner.{type Token, token_to_string}
 
 /// A parser really has two jobs:
@@ -100,6 +102,10 @@ fn synchronize() {
 pub type Parser(token, value) =
   fn(List(token)) -> ParseResult(token, value)
 
+fn unexpected_token_error(expected: String, token: Token) -> String {
+  "Expected " <> expected <> " but saw " <> token_to_string(token)
+}
+
 /// A Gleam parser for the following grammar.
 /// ```
 /// expression     → equality ;
@@ -123,8 +129,7 @@ pub fn unary() -> Parser(Token, expr.Expr) {
     use token <- get(one_token())
     use op <- unwrap(
       token_as_expr_unary_op(token),
-      "Expected a unary op `! , -` but unexpectedly saw "
-        <> token_to_string(token),
+      unexpected_token_error("a unary op `! , -`", token),
     )
     use unary <- get(unary())
     return(expr.Unary(op, unary))
@@ -150,8 +155,10 @@ pub fn primary() -> Parser(Token, expr.Expr) {
     use token <- get(one_token())
     use literal <- unwrap(
       token_as_expr_literal(token),
-      "Expected a literal `Number , String , true , false , nil`, but saw "
-        <> token_to_string(token),
+      unexpected_token_error(
+        "a literal `Number , String , true , false , nil`",
+        token,
+      ),
     )
     return(expr.Literal(literal))
   }
@@ -160,13 +167,13 @@ pub fn primary() -> Parser(Token, expr.Expr) {
     use token <- get(one_token())
     use <- when(
       is_left_parens(token),
-      "Expected an open parens, but saw " <> token_to_string(token),
+      unexpected_token_error("an open parens", token),
     )
     use expr <- get(expr())
     use token <- get(one_token())
     use <- when(
       is_right_parens(token),
-      "Expected a closing parens, but saw " <> token_to_string(token),
+      unexpected_token_error("a closing parens", token),
     )
     return(expr.Grouping(expr))
   })
@@ -221,8 +228,10 @@ pub fn binary_operator() -> Parser(Token, expr.BinaryOp) {
   use token <- get(one_token())
   use binary_op <- unwrap(
     token_as_expr_binary_op(token),
-    "Expected a binary operator `== , != , < , <= , > , >= , +  , -  , * , /`, but saw "
-      <> token_to_string(token),
+    unexpected_token_error(
+      "a binary operator `== , != , < , <= , > , >= , +  , -  , * , /`",
+      token,
+    ),
   )
   return(binary_op)
 }
@@ -301,6 +310,18 @@ fn unwrap(
   case result {
     None -> fn(_unconsumed) { Error(failure_message) }
     Some(b) -> continue(b)
+  }
+}
+
+// This is essentially `choose` but targeted at making `use`-syntax more readable
+// This is essentially `get` but targetted at `Result` values!
+fn unwrap_r(
+  result: Result(b, String),
+  continue: fn(b) -> Parser(token, c),
+) -> Parser(token, c) {
+  case result {
+    gleam.Error(failure_message) -> fn(_unconsumed) { Error(failure_message) }
+    Ok(b) -> continue(b)
   }
 }
 

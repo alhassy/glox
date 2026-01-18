@@ -29,12 +29,12 @@ pub fn parse_unary_test() {
   expect_parse_error(
     parse.expr,
     "- (123)",
-    "Expected a unary op `! , -` but unexpectedly saw Whitespace",
+    "Expected a unary op `! , -` but saw Whitespace",
   )
   expect_parse_error(
     parse.expr,
     "-+(123)",
-    "Expected a unary op `! , -` but unexpectedly saw +",
+    "Expected a unary op `! , -` but saw +",
   )
 }
 
@@ -61,17 +61,17 @@ pub fn parse_literal_fails_result_in_informative_messages_test() {
   expect_parse_error(
     parse.primary,
     "apple",
-    "Expected a literal `Number , String , true , false , nil`, but saw identifier `apple`",
+    "Expected a literal `Number , String , true , false , nil` but saw identifier `apple`",
   )
   expect_parse_error(
     parse.primary,
     "*",
-    "Expected a literal `Number , String , true , false , nil`, but saw *",
+    "Expected a literal `Number , String , true , false , nil` but saw *",
   )
   expect_parse_error(
     parse.primary,
     "var x = 123;",
-    "Expected a literal `Number , String , true , false , nil`, but saw keyword `var`",
+    "Expected a literal `Number , String , true , false , nil` but saw keyword `var`",
   )
 }
 
@@ -87,7 +87,7 @@ pub fn parse_binary_op_fails_result_in_informative_messages_test() {
   expect_parse_error(
     parse.binary_operator,
     "!",
-    "Expected a binary operator `== , != , < , <= , > , >= , +  , -  , * , /`, but saw !",
+    "Expected a binary operator `== , != , < , <= , > , >= , +  , -  , * , /` but saw !",
   )
 }
 
