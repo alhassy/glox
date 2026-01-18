@@ -305,20 +305,10 @@ fn filter(
   }
 }
 
-// This is essentially `choose` but targeted at making `use`-syntax more readable
-fn unwrap(
-  result: Option(b),
-  failure_message: String,
-  continue: fn(b) -> Parser(token, c),
-) -> Parser(token, c) {
-  case result {
-    None -> fn(_unconsumed) { Error(failure_message) }
-    Some(b) -> continue(b)
-  }
-}
-
-// This is essentially `choose` but targeted at making `use`-syntax more readable
-// This is essentially `get` but targetted at `Result` values!
+/// This is essentially `choose` but targeted at making `use`-syntax more readable
+/// This is essentially `then`/`get` but targetted at `Result` values!
+/// # More precisely
+/// `use x <- get(p); use c <- unwrap_result(f(x)); k(c)` == `p |> choose(f) |> then(k)`
 fn unwrap_result(
   result: Result(b, String),
   continue: fn(b) -> Parser(token, c),
