@@ -1,7 +1,5 @@
-import expr.{type Expr}
 import gleam
-import gleam/option.{type Option, None, Some}
-import scanner.{type Token, token_to_string} as s
+import scanner.{type Token}
 
 /// A parser really has two jobs:
 ///
@@ -101,78 +99,13 @@ fn synchronize() {
 pub type Parser(token, value) =
   fn(List(token)) -> ParseResult(token, value)
 
-fn expecting(
-  option: Option(value),
-  it token: Token,
-  to_be expectation: String,
-) -> Result(value, String) {
-  option
-  |> option.to_result(expected(it: token, to_be: expectation))
-}
-
-fn expected(to_be expected: String, it token: Token) -> String {
-  "Expected " <> expected <> " but saw " <> token_to_string(token)
-}
-
-/// A Gleam parser for the following grammar.
-/// ```
-/// expression     → equality ;
-/// equality       → comparison ( ( "!=" | "==" ) comparison )* ;
-/// comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-/// term           → factor ( ( "-" | "+" ) factor )* ;
-/// factor         → unary ( ( "/" | "*" ) unary )* ;
-/// unary          → ( "!" | "-" ) unary
-///                | primary ;
-/// primary        → NUMBER | STRING | "true" | "false" | "nil"
-///                | "(" expression ")" ;
-/// ```
-pub fn expr() -> Parser(Token, expr.Expr) {
-  term()
-}
-
-/// Implement grammar rule  `equality       → comparison ( ( "!=" | "==" ) comparison )* ;`
-pub fn equality() -> Parser(Token, Expr) {
-  many_with_seperator(
-    value_parser: comparison(),
-    seperator_parser: one_token() |> choose(token_as_equals_or_non),
-    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
-  )
-}
-
-/// Implement grammar rule  `comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;`
-pub fn comparison() -> Parser(Token, Expr) {
-  many_with_seperator(
-    value_parser: term(),
-    seperator_parser: one_token() |> choose(token_as_comparison),
-    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
-  )
-}
-
-/// Implement grammar rule `term           → factor ( ( "-" | "+" ) factor )* ;`
-pub fn term() -> Parser(Token, Expr) {
-  many_with_seperator(
-    value_parser: factor(),
-    seperator_parser: one_token() |> choose(token_as_minus_or_plus),
-    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
-  )
-}
-
-/// Implement grammar rule `factor         → unary ( ( "/" | "*" ) unary )* `
-pub fn factor() -> Parser(Token, Expr) {
-  many_with_seperator(
-    value_parser: unary(),
-    seperator_parser: one_token() |> choose(token_as_div_or_mult),
-    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
-  )
-}
-
 /// Implement the grammar rule `value (seperator value)*`
 /// then combine the results via `combiner`.
 /// ### Examples
 /// + Commas: `1, 2, 3`
 /// + Terms:  `1 + 2 + 3`
 /// + Terms:  `1 + 2 - 3`, the separator parser parses `+` or `-`
-fn many_with_seperator(
+pub fn many_with_seperator(
   value_parser value_parser: Parser(token, value),
   seperator_parser seperator_parser: Parser(token, seperator),
   combiner combiner: fn(value, seperator, value) -> value,
@@ -211,106 +144,7 @@ fn star(parser: Parser(token, value)) -> Parser(token, List(value)) {
   }
 }
 
-fn token_as_div_or_mult(it: Token) -> Result(expr.BinaryOp, String) {
-  case it {
-    s.Operator(s.Division, _) -> Some(expr.Divides)
-    s.Operator(s.Times, _) -> Some(expr.Times)
-    _ -> None
-  }
-  |> expecting(it, to_be: "the binary operator `/` or `*`")
-}
-
-fn token_as_minus_or_plus(it: Token) -> Result(expr.BinaryOp, String) {
-  case it {
-    s.Operator(s.Minus, _) -> Some(expr.Minus)
-    s.Operator(s.Plus, _) -> Some(expr.Plus)
-    _ -> None
-  }
-  |> expecting(it, to_be: "the binary operator `-` or `+`")
-}
-
-fn token_as_comparison(it: Token) -> Result(expr.BinaryOp, String) {
-  case it {
-    s.Operator(s.LessThan, _) -> Some(expr.LessThan)
-    s.Operator(s.AtMost, _) -> Some(expr.AtMost)
-    s.Operator(s.GreaterThan, _) -> Some(expr.GreaterThan)
-    s.Operator(s.AtLeast, _) -> Some(expr.AtLeast)
-    _ -> None
-  }
-  |> expecting(it, to_be: "a comparison operator `>, >=, <, <=`")
-}
-
-fn token_as_equals_or_non(it: Token) -> Result(expr.BinaryOp, String) {
-  case it {
-    s.Operator(s.Equal, _) -> Some(expr.Equals)
-    s.Operator(s.NotEqual, _) -> Some(expr.NotEquals)
-    _ -> None
-  }
-  |> expecting(it, to_be: "an equality operator `==` or `!=`")
-}
-
-/// Implement grammar rule `unary   →   ( "!" | "-" ) unary  |  primary`
-pub fn unary() -> Parser(Token, expr.Expr) {
-  one_token()
-  |> choose(token_as_expr_unary_op)
-  |> then(fn(op) { unary() |> map(expr.Unary(op, _)) })
-  |> or(primary())
-}
-
-fn token_as_expr_unary_op(it: Token) -> Result(expr.UnaryOp, String) {
-  case it {
-    s.Operator(s.Negation, _) -> expr.BooleanNegation |> Some
-    s.Operator(s.Minus, _) -> expr.NumericNegation |> Some
-    _ -> None
-  }
-  |> expecting(it, to_be: "a unary op `! , -`")
-}
-
-pub fn primary() -> Parser(Token, expr.Expr) {
-  // Do we have a literal expression?
-  {
-    one_token()
-    |> choose(token_as_expr_literal)
-    |> map(expr.Literal)
-  }
-  // Or a parenthesised expression?
-  |> or({
-    use it <- get(one_token())
-    use <- asserting(it, is_left_parens, ie: "an open parens")
-    use expr <- get(expr())
-    use it <- get(one_token())
-    use <- asserting(it, is_right_parens, ie: "a closing parens")
-    return(expr.Grouping(expr))
-  })
-}
-
-fn is_left_parens(token: Token) -> Bool {
-  case token {
-    s.Punctuation(s.LeftParen, _) -> True
-    _ -> False
-  }
-}
-
-fn is_right_parens(token: Token) -> Bool {
-  case token {
-    s.Punctuation(s.RightParen, _) -> True
-    _ -> False
-  }
-}
-
-fn token_as_expr_literal(it: Token) -> Result(expr.Literal, String) {
-  case it {
-    s.Literal(s.Number(value), _) -> value |> expr.Number |> Some
-    s.Literal(s.String(value), _) -> value |> expr.String |> Some
-    s.Keyword(s.LNil, _) -> expr.Nil |> Some
-    s.Keyword(s.LTrue, _) -> True |> expr.Boolean |> Some
-    s.Keyword(s.LFalse, _) -> False |> expr.Boolean |> Some
-    _ -> None
-  }
-  |> expecting(it, to_be: "a literal `Number , String , true , false , nil`")
-}
-
-fn one_token() -> Parser(Token, Token) {
+pub fn one_token() -> Parser(Token, Token) {
   fn(tokens) {
     case tokens {
       [t, ..ts] -> Success(found: t, unconsumed: ts)
@@ -320,23 +154,13 @@ fn one_token() -> Parser(Token, Token) {
 }
 
 /// The parser that always succeeds and returns the given `token`
-fn return(found) -> Parser(token, value) {
+pub fn return(found) -> Parser(token, value) {
   fn(unconsumed) { Success(found, unconsumed) }
-}
-
-/// Instead of writing `use <- when(it |> is_foo, it |> expected("foo", _))`, write `use <- expecting_(it, is_foo, ie:, "foo")`
-fn asserting(
-  it: Token,
-  predicate: fn(Token) -> Bool,
-  continuation: fn() -> fn(List(a)) -> ParseResult(a, b),
-  ie msg: String,
-) -> fn(List(a)) -> ParseResult(a, b) {
-  when(predicate(it), expected(msg, it), continuation)
 }
 
 /// This is essentially `filter` but aimed at `use`-syntax.
 /// ### Example: `filter(p, f, msg) == { use x <- p; use <- when(f(x), msg); return(x) }
-fn when(
+pub fn when(
   condition: Bool,
   message: String,
   continue: fn() -> Parser(token, value),
@@ -380,7 +204,7 @@ fn unwrap_result(
 
 /// Applies a partial map to the result of a parser.
 /// This is essentially both a `filter` and `map`.
-fn choose(
+pub fn choose(
   parser: Parser(token, value_a),
   selector: fn(value_a) -> Result(value_b, String),
 ) -> Parser(token, value_b) {
@@ -396,7 +220,7 @@ fn choose(
   }
 }
 
-fn map(
+pub fn map(
   parser: Parser(token, value_a),
   mapper: fn(value_a) -> value_b,
 ) -> Parser(token, value_b) {
@@ -409,7 +233,7 @@ fn map(
 }
 
 /// Run the `main` parser but if it fails then run the `fallback` parser.
-fn or(main: Parser(a, b), fallback: Parser(a, b)) -> Parser(a, b) {
+pub fn or(main: Parser(a, b), fallback: Parser(a, b)) -> Parser(a, b) {
   fn(tokens) {
     case main(tokens) {
       Error(_) as first_error ->
@@ -425,7 +249,7 @@ fn or(main: Parser(a, b), fallback: Parser(a, b)) -> Parser(a, b) {
 }
 
 /// Parser an `a`-value then execute a parser-producing callback to obtain a `b`-value.
-fn then(
+pub fn then(
   first: Parser(token, a),
   then: fn(a) -> Parser(token, b),
 ) -> Parser(token, b) {

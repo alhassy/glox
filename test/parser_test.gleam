@@ -3,7 +3,8 @@ import expr.{
   Plus, Times,
 }
 import gleeunit
-import parse.{Success}
+import parser
+import parser_combinators.{Error, Success}
 import scanner.{Operator, scan_tokens}
 
 pub fn main() -> Nil {
@@ -11,7 +12,7 @@ pub fn main() -> Nil {
 }
 
 pub fn parse_equality_test() {
-  assert run(parse.equality, "1 * 2  <=  3 / 4    ==   true")
+  assert run(parser.equality, "1 * 2  <=  3 / 4    ==   true")
     == Success(
       Binary(
         Equals,
@@ -27,7 +28,7 @@ pub fn parse_equality_test() {
 }
 
 pub fn parse_comparison_test() {
-  assert run(parse.comparison, "1 * 2 <= 3 / 4 + 5")
+  assert run(parser.comparison, "1 * 2 <= 3 / 4 + 5")
     == Success(
       Binary(
         AtMost,
@@ -43,7 +44,7 @@ pub fn parse_comparison_test() {
 }
 
 pub fn parse_term_test() {
-  assert run(parse.term, "1 * 2 - 3 / 4 + 5")
+  assert run(parser.term, "1 * 2 - 3 / 4 + 5")
     == Success(
       Binary(
         Plus,
@@ -59,9 +60,9 @@ pub fn parse_term_test() {
 }
 
 pub fn parse_factor_test() {
-  assert run(parse.factor, "(123)")
+  assert run(parser.factor, "(123)")
     == Success(Grouping(Literal(Number(123.0))), [])
-  assert run(parse.factor, "(123)*4")
+  assert run(parser.factor, "(123)*4")
     == Success(
       Binary(Times, Grouping(Literal(Number(123.0))), Literal(Number(4.0))),
       [],
@@ -79,9 +80,9 @@ pub fn parse_factor_test() {
       ),
       [],
     )
-  assert run(parse.factor, "1*2/3*4") == one_times_two_div_3_times_4
+  assert run(parser.factor, "1*2/3*4") == one_times_two_div_3_times_4
   // Whitespace don't matter 🥳
-  assert run(parse.factor, "1 * 2  /3* 4") == one_times_two_div_3_times_4
+  assert run(parser.factor, "1 * 2  /3* 4") == one_times_two_div_3_times_4
 }
 
 pub fn parse_unary_test() {
@@ -93,8 +94,8 @@ pub fn parse_unary_test() {
       scanner.Literal(scanner.Number(123.0), 0),
       scanner.Punctuation(scanner.RightParen, 0),
     ]
-  assert parse.expr()(tokens)
-    == parse.Success(
+  assert parser.expr()(tokens)
+    == Success(
       expr.Unary(
         expr.NumericNegation,
         expr.Grouping(expr.Literal(expr.Number(123.0))),
@@ -104,51 +105,51 @@ pub fn parse_unary_test() {
     as "Parsing  -(123)  expr"
 
   expect_parse_error(
-    parse.expr,
+    parser.expr,
     "-+(123)",
     "Expected a unary op `! , -` but saw +",
   )
 }
 
 pub fn parse_parenthesised_test() {
-  assert run(parse.expr, "(123)")
-    == parse.Success(expr.Grouping(expr.Literal(expr.Number(123.0))), [])
+  assert run(parser.expr, "(123)")
+    == Success(expr.Grouping(expr.Literal(expr.Number(123.0))), [])
     as "Parsing  (123)  expr"
 }
 
 pub fn parse_literal_test() {
-  assert run(parse.primary, "123")
-    == parse.Success(expr.Literal(expr.Number(123.0)), [])
+  assert run(parser.primary, "123")
+    == Success(expr.Literal(expr.Number(123.0)), [])
     as "Parsing  123  literal"
 
-  assert run(parse.primary, "nil") == parse.Success(expr.Literal(expr.Nil), [])
+  assert run(parser.primary, "nil") == Success(expr.Literal(expr.Nil), [])
     as "Parsing  nil  literal"
 
-  assert run(parse.primary, "true")
-    == parse.Success(expr.Literal(expr.Boolean(True)), [])
+  assert run(parser.primary, "true")
+    == Success(expr.Literal(expr.Boolean(True)), [])
     as "Parsing  true  literal"
 }
 
 pub fn parse_literal_fails_result_in_informative_messages_test() {
   expect_parse_error(
-    parse.primary,
+    parser.primary,
     "apple",
     "Expected a literal `Number , String , true , false , nil` but saw identifier `apple`",
   )
   expect_parse_error(
-    parse.primary,
+    parser.primary,
     "*",
     "Expected a literal `Number , String , true , false , nil` but saw *",
   )
   expect_parse_error(
-    parse.primary,
+    parser.primary,
     "var x = 123;",
     "Expected a literal `Number , String , true , false , nil` but saw keyword `var`",
   )
 }
 
 fn expect_parse_error(parser, input, err_msg) {
-  assert run(parser, input) == parse.Error(err_msg)
+  assert run(parser, input) == Error(err_msg)
 }
 
 fn run(parser, input) {
