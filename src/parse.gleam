@@ -102,7 +102,16 @@ fn synchronize() {
 pub type Parser(token, value) =
   fn(List(token)) -> ParseResult(token, value)
 
-fn unexpected_token_error(expected: String, token: Token) -> String {
+fn expecting(
+  option: Option(value),
+  to_be expectation: String,
+  it token: Token,
+) -> Result(value, String) {
+  option
+  |> option.to_result(expected(it: token, to_be: expectation))
+}
+
+fn expected(to_be expected: String, it token: Token) -> String {
   "Expected " <> expected <> " but saw " <> token_to_string(token)
 }
 
@@ -144,35 +153,23 @@ fn token_as_expr_unary_op(it: Token) -> Result(expr.UnaryOp, String) {
       }
     _ -> None
   }
-  |> option.to_result(unexpected_token_error("a unary op `! , -`", it))
+  |> expecting(it, to_be: "a unary op `! , -`")
 }
 
 pub fn primary() -> Parser(Token, expr.Expr) {
   // Do we have a literal expression?
   {
     use token <- get(one_token())
-    use literal <- unwrap(
-      token_as_expr_literal(token),
-      unexpected_token_error(
-        "a literal `Number , String , true , false , nil`",
-        token,
-      ),
-    )
+    use literal <- unwrap_result(token_as_expr_literal(token))
     return(expr.Literal(literal))
   }
   // Or a parenthesised expression?
   |> or({
-    use token <- get(one_token())
-    use <- when(
-      is_left_parens(token),
-      unexpected_token_error("an open parens", token),
-    )
+    use it <- get(one_token())
+    use <- asserting(it, is_left_parens, ie: "an open parens")
     use expr <- get(expr())
-    use token <- get(one_token())
-    use <- when(
-      is_right_parens(token),
-      unexpected_token_error("a closing parens", token),
-    )
+    use it <- get(one_token())
+    use <- asserting(it, is_right_parens, ie: "a closing parens")
     return(expr.Grouping(expr))
   })
 }
@@ -191,8 +188,8 @@ fn is_right_parens(token: Token) -> Bool {
   }
 }
 
-fn token_as_expr_literal(t: Token) -> Option(expr.Literal) {
-  case t {
+fn token_as_expr_literal(it: Token) -> Result(expr.Literal, String) {
+  case it {
     scanner.Literal(lexeme, _) ->
       case lexeme {
         scanner.Number(value) -> value |> expr.Number |> Some
@@ -208,6 +205,7 @@ fn token_as_expr_literal(t: Token) -> Option(expr.Literal) {
       }
     _ -> None
   }
+  |> expecting(it, to_be: "a literal `Number , String , true , false , nil`")
 }
 
 ///  😁 Notice that using Parsing Combinator, the parser looks almost identical to the associated grammar rule!
@@ -224,18 +222,12 @@ pub fn binary_expr() -> Parser(Token, expr.Expr) {
 
 pub fn binary_operator() -> Parser(Token, expr.BinaryOp) {
   use token <- get(one_token())
-  use binary_op <- unwrap(
-    token_as_expr_binary_op(token),
-    unexpected_token_error(
-      "a binary operator `== , != , < , <= , > , >= , +  , -  , * , /`",
-      token,
-    ),
-  )
+  use binary_op <- unwrap_result(token_as_expr_binary_op(token))
   return(binary_op)
 }
 
-fn token_as_expr_binary_op(t: Token) -> Option(expr.BinaryOp) {
-  case t {
+fn token_as_expr_binary_op(it: Token) -> Result(expr.BinaryOp, String) {
+  case it {
     scanner.Operator(lexeme, _) ->
       case lexeme {
         scanner.AtLeast -> Some(expr.AtLeast)
@@ -253,6 +245,10 @@ fn token_as_expr_binary_op(t: Token) -> Option(expr.BinaryOp) {
       }
     _ -> None
   }
+  |> expecting(
+    it,
+    to_be: "a binary operator `== , != , < , <= , > , >= , +  , -  , * , /`",
+  )
 }
 
 fn one_token() -> Parser(Token, Token) {
@@ -267,6 +263,16 @@ fn one_token() -> Parser(Token, Token) {
 /// The parser that always succeeds and returns the given `token`
 fn return(found) -> Parser(token, value) {
   fn(unconsumed) { Success(found, unconsumed) }
+}
+
+/// Instead of writing `use <- when(it |> is_foo, it |> expected("foo", _))`, write `use <- expecting_(it, is_foo, ie:, "foo")`
+fn asserting(
+  it: Token,
+  predicate: fn(Token) -> Bool,
+  continuation: fn() -> fn(List(a)) -> ParseResult(a, b),
+  ie msg: String,
+) -> fn(List(a)) -> ParseResult(a, b) {
+  when(predicate(it), expected(msg, it), continuation)
 }
 
 /// This is essentially `filter` but aimed at `use`-syntax.
@@ -327,16 +333,15 @@ fn unwrap_result(
 /// This is essentially both a `filter` and `map`.
 fn choose(
   parser: Parser(token, value_a),
-  selector: fn(value_a) -> Option(value_b),
-  failure_message: String,
+  selector: fn(value_a) -> Result(value_b, String),
 ) -> Parser(token, value_b) {
   fn(tokens) {
     case parser(tokens) {
       Error(msg) -> Error(msg)
       Success(found:, unconsumed:) ->
         case selector(found) {
-          Some(b) -> Success(b, unconsumed)
-          None -> Error(failure_message)
+          Ok(found) -> Success(found, unconsumed)
+          gleam.Error(failure_message) -> Error(failure_message)
         }
     }
   }
