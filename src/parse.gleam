@@ -130,6 +130,15 @@ pub fn expr() -> Parser(Token, expr.Expr) {
   term()
 }
 
+/// Implement grammar rule  `equality       → comparison ( ( "!=" | "==" ) comparison )* ;`
+pub fn equality() -> Parser(Token, Expr) {
+  many_with_seperator(
+    value_parser: comparison(),
+    seperator_parser: one_token() |> choose(token_as_equals_or_non),
+    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
+  )
+}
+
 /// Implement grammar rule  `comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;`
 pub fn comparison() -> Parser(Token, Expr) {
   many_with_seperator(
@@ -229,6 +238,15 @@ fn token_as_comparison(it: Token) -> Result(expr.BinaryOp, String) {
     _ -> None
   }
   |> expecting(it, to_be: "a comparison operator `>, >=, <, <=`")
+}
+
+fn token_as_equals_or_non(it: Token) -> Result(expr.BinaryOp, String) {
+  case it {
+    s.Operator(s.Equal, _) -> Some(expr.Equals)
+    s.Operator(s.NotEqual, _) -> Some(expr.NotEquals)
+    _ -> None
+  }
+  |> expecting(it, to_be: "an equality operator `==` or `!=`")
 }
 
 /// Implement grammar rule `unary   →   ( "!" | "-" ) unary  |  primary`

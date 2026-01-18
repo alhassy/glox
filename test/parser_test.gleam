@@ -1,5 +1,6 @@
 import expr.{
-  AtMost, Binary, Divides, Grouping, Literal, Minus, Number, Plus, Times,
+  AtMost, Binary, Boolean, Divides, Equals, Grouping, Literal, Minus, Number,
+  Plus, Times,
 }
 import gleeunit
 import parse.{Success}
@@ -7,6 +8,22 @@ import scanner.{Operator, scan_tokens}
 
 pub fn main() -> Nil {
   gleeunit.main()
+}
+
+pub fn parse_equality_test() {
+  assert run(parse.equality, "1 * 2  <=  3 / 4    ==   true")
+    == Success(
+      Binary(
+        Equals,
+        Binary(
+          AtMost,
+          Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
+          Binary(Divides, Literal(Number(3.0)), Literal(Number(4.0))),
+        ),
+        Literal(Boolean(True)),
+      ),
+      [],
+    )
 }
 
 pub fn parse_comparison_test() {
