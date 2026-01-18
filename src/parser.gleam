@@ -1,5 +1,4 @@
 import expr.{type Expr}
-import gleam
 import gleam/option.{type Option, None, Some}
 import parser_combinators.{type Parser} as parse
 import scanner.{type Token, token_to_string} as s

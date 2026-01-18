@@ -1,6 +1,6 @@
 import expr.{
-  AtMost, Binary, Boolean, Divides, Equals, Grouping, Literal, Minus, Number,
-  Plus, Times,
+  AtMost, Binary, Boolean, Divides, Equals, Grouping, LessThan, Literal, Minus,
+  NotEquals, Number, Plus, Times,
 }
 import gleeunit
 import parser
@@ -9,6 +9,22 @@ import scanner.{Operator, scan_tokens}
 
 pub fn main() -> Nil {
   gleeunit.main()
+}
+
+pub fn parse_expr_test() {
+  assert run(parser.equality, "1 * 2  !=   (2 < (0 - 0))")
+    == Success(
+      Binary(
+        NotEquals,
+        Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
+        Grouping(Binary(
+          LessThan,
+          Literal(Number(2.0)),
+          Grouping(Binary(Minus, Literal(Number(0.0)), Literal(Number(0.0)))),
+        )),
+      ),
+      [],
+    )
 }
 
 pub fn parse_equality_test() {
