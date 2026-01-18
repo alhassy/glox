@@ -25,6 +25,20 @@ pub fn parse_expr_test() {
       ),
       [],
     )
+
+  // We parse `1 * 2` as valid input and leave the rest as unconsumed input.
+  assert run(parser.equality, "1 * 2 3 4")
+    == Success(Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))), [
+      scanner.Literal(scanner.Number(3.0), 0),
+      scanner.Literal(scanner.Number(4.0), 0),
+    ])
+
+  // We parse `1` as valid input and leave the rest as unconsumed input.
+  assert run(parser.equality, "1 * apple")
+    == Success(Literal(Number(1.0)), [
+      Operator(scanner.Times, 0),
+      scanner.Literal(scanner.Identifer("apple"), 0),
+    ])
 }
 
 pub fn parse_equality_test() {
@@ -134,33 +148,29 @@ pub fn parse_parenthesised_test() {
 }
 
 pub fn parse_literal_test() {
-  assert run(parser.primary, "123")
+  assert run(parser.expr, "123")
     == Success(expr.Literal(expr.Number(123.0)), [])
     as "Parsing  123  literal"
 
-  assert run(parser.primary, "nil") == Success(expr.Literal(expr.Nil), [])
+  assert run(parser.expr, "nil") == Success(expr.Literal(expr.Nil), [])
     as "Parsing  nil  literal"
 
-  assert run(parser.primary, "true")
+  assert run(parser.expr, "true")
     == Success(expr.Literal(expr.Boolean(True)), [])
     as "Parsing  true  literal"
 }
 
 pub fn parse_literal_fails_result_in_informative_messages_test() {
   expect_parse_error(
-    parser.primary,
+    parser.expr,
     "apple",
-    "Expected a literal `Number , String , true , false , nil` but saw identifier `apple`",
+    "Expected a unary op `! , -` but saw identifier `apple`",
   )
+  expect_parse_error(parser.expr, "*", "Expected a unary op `! , -` but saw *")
   expect_parse_error(
-    parser.primary,
-    "*",
-    "Expected a literal `Number , String , true , false , nil` but saw *",
-  )
-  expect_parse_error(
-    parser.primary,
+    parser.expr,
     "var x = 123;",
-    "Expected a literal `Number , String , true , false , nil` but saw keyword `var`",
+    "Expected a unary op `! , -` but saw keyword `var`",
   )
 }
 

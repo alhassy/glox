@@ -3,19 +3,6 @@ import gleam/option.{type Option, None, Some}
 import parser_combinators.{type Parser} as parse
 import scanner.{type Token, token_to_string} as s
 
-fn expecting(
-  option: Option(value),
-  it token: Token,
-  to_be expectation: String,
-) -> Result(value, String) {
-  option
-  |> option.to_result(expected(it: token, to_be: expectation))
-}
-
-fn expected(to_be expected: String, it token: Token) -> String {
-  "Expected " <> expected <> " but saw " <> token_to_string(token)
-}
-
 /// A Gleam parser for the following grammar.
 /// ```
 /// expression     → equality ;
@@ -111,7 +98,8 @@ pub fn unary() -> Parser(Token, expr.Expr) {
   parse.one_token()
   |> parse.choose(token_as_expr_unary_op)
   |> parse.then(fn(op) { unary() |> parse.map(expr.Unary(op, _)) })
-  |> parse.or(primary())
+  |> parse.or(literal())
+  |> parse.or(grouping())
 }
 
 fn token_as_expr_unary_op(it: Token) -> Result(expr.UnaryOp, String) {
@@ -123,22 +111,32 @@ fn token_as_expr_unary_op(it: Token) -> Result(expr.UnaryOp, String) {
   |> expecting(it, to_be: "a unary op `! , -`")
 }
 
-pub fn primary() -> Parser(Token, expr.Expr) {
-  // Do we have a literal expression?
-  {
-    parse.one_token()
-    |> parse.choose(token_as_expr_literal)
-    |> parse.map(expr.Literal)
+fn literal() {
+  parse.one_token()
+  |> parse.choose(token_as_expr_literal)
+  |> parse.map(expr.Literal)
+}
+
+fn token_as_expr_literal(it: Token) -> Result(expr.Literal, String) {
+  case it {
+    s.Literal(s.Number(value), _) -> value |> expr.Number |> Some
+    s.Literal(s.String(value), _) -> value |> expr.String |> Some
+    s.Keyword(s.LNil, _) -> expr.Nil |> Some
+    s.Keyword(s.LTrue, _) -> True |> expr.Boolean |> Some
+    s.Keyword(s.LFalse, _) -> False |> expr.Boolean |> Some
+    _ -> None
   }
-  // Or a parenthesised expression?
-  |> parse.or({
-    use it <- get(parse.one_token())
-    use <- asserting(it, is_left_parens, ie: "an open parens")
-    use expr <- get(expr())
-    use it <- get(parse.one_token())
-    use <- asserting(it, is_right_parens, ie: "a closing parens")
-    parse.return(expr.Grouping(expr))
-  })
+  |> expecting(it, to_be: "a literal `Number , String , true , false , nil`")
+}
+
+// Parse a parenthesised expression?
+fn grouping() -> Parser(Token, expr.Expr) {
+  use it <- get(parse.one_token())
+  use <- asserting(it, is_left_parens, ie: "an open parens")
+  use expr <- get(expr())
+  use it <- get(parse.one_token())
+  use <- asserting(it, is_right_parens, ie: "a closing parens")
+  parse.return(expr.Grouping(expr))
 }
 
 fn is_left_parens(token: Token) -> Bool {
@@ -155,16 +153,9 @@ fn is_right_parens(token: Token) -> Bool {
   }
 }
 
-fn token_as_expr_literal(it: Token) -> Result(expr.Literal, String) {
-  case it {
-    s.Literal(s.Number(value), _) -> value |> expr.Number |> Some
-    s.Literal(s.String(value), _) -> value |> expr.String |> Some
-    s.Keyword(s.LNil, _) -> expr.Nil |> Some
-    s.Keyword(s.LTrue, _) -> True |> expr.Boolean |> Some
-    s.Keyword(s.LFalse, _) -> False |> expr.Boolean |> Some
-    _ -> None
-  }
-  |> expecting(it, to_be: "a literal `Number , String , true , false , nil`")
+/// An alias for `then` that makes code involving `use` more readable
+fn get(first, callback) {
+  parse.then(first, callback)
 }
 
 /// Instead of writing `use <- when(it |> is_foo, it |> expected("foo", _))`, write `use <- expecting_(it, is_foo, ie:, "foo")`
@@ -177,7 +168,15 @@ fn asserting(
   parse.when(predicate(it), expected(msg, it), continuation)
 }
 
-/// An alias for `then` that makes code involving `use` more readable
-fn get(first, callback) {
-  parse.then(first, callback)
+fn expecting(
+  option: Option(value),
+  it token: Token,
+  to_be expectation: String,
+) -> Result(value, String) {
+  option
+  |> option.to_result(expected(it: token, to_be: expectation))
+}
+
+fn expected(to_be expected: String, it token: Token) -> String {
+  "Expected " <> expected <> " but saw " <> token_to_string(token)
 }
