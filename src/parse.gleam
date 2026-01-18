@@ -159,9 +159,9 @@ fn token_as_expr_unary_op(it: Token) -> Result(expr.UnaryOp, String) {
 pub fn primary() -> Parser(Token, expr.Expr) {
   // Do we have a literal expression?
   {
-    use token <- get(one_token())
-    use literal <- unwrap_result(token_as_expr_literal(token))
-    return(expr.Literal(literal))
+    one_token()
+    |> choose(token_as_expr_literal)
+    |> map(expr.Literal)
   }
   // Or a parenthesised expression?
   |> or({
