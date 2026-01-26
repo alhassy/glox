@@ -147,7 +147,7 @@ fn scan_lexeme(text: String, line: Int) -> Result(Step(Token), LError) {
   case text {
     // Either success, or else an error: Unknown char
     "" -> Ok(Step(Punctuation(EOF, line), ""))
-    // Whitespace
+    // Whitespace; note, we can just have a recursive call here `scan_lexeme(more)` instead of keeping whitespace! 😅
     " " <> more -> Ok(Step(Punctuation(Whitespace, line), more))
     "\t" <> more -> Ok(Step(Punctuation(Whitespace, line), more))
     "\r" <> more -> Ok(Step(Punctuation(Whitespace, line), more))

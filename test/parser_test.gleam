@@ -12,6 +12,7 @@ pub fn main() -> Nil {
 }
 
 pub fn parse_expr_test() {
+  // Valid complete expression
   assert run(parser.equality, "1 * 2  !=   (2 < (0 - 0))")
     == Success(
       Binary(
@@ -26,19 +27,42 @@ pub fn parse_expr_test() {
       [],
     )
 
-  // We parse `1 * 2` as valid input and leave the rest as unconsumed input.
+  // NEW BEHAVIOR: `1 * 2 3 4` now ERRORS because after parsing `1 * 2`,
+  // we find `3` (a NUMBER token) without a separator before it
+  // Context-aware checking: NUMBER tokens can never be operators!
   assert run(parser.equality, "1 * 2 3 4")
-    == Success(Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))), [
-      scanner.Literal(scanner.Number(3.0), 0),
-      scanner.Literal(scanner.Number(4.0), 0),
-    ])
+    == Error(
+      "Expected separator between values \n Expected the binary operator `/` or `*` but saw 3.0",
+      True,
+    )
 
-  // We parse `1` as valid input and leave the rest as unconsumed input.
+  // Same for `1 1` - second `1` is a NUMBER without separator
+  assert run(parser.equality, "1 1")
+    == Error(
+      "Expected separator between values \n Expected the binary operator `/` or `*` but saw 1.0",
+      True,
+    )
+
+  // But `1 * 2 - 3` still works because `-` is NOT a primary token
+  assert run(parser.equality, "1 * 2 - 3")
+    == Success(
+      Binary(
+        Minus,
+        Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
+        Literal(Number(3.0)),
+      ),
+      [],
+    )
+
+  // `1 * apple` ERRORS because after parsing `*` successfully,
+  // we MUST parse a factor but `apple` is not valid.
   assert run(parser.equality, "1 * apple")
-    == Success(Literal(Number(1.0)), [
-      Operator(scanner.Times, 0),
-      scanner.Literal(scanner.Identifer("apple"), 0),
-    ])
+    == Error(
+      "Expected an open parens but saw identifier `apple` "
+        <> "\n Expected a literal `Number , String , true , false , nil` but saw identifier `apple` "
+        <> "\n Expected a unary op `! , -` but saw identifier `apple`",
+      committed: True,
+    )
 }
 
 pub fn parse_equality_test() {
@@ -137,7 +161,11 @@ pub fn parse_unary_test() {
   expect_parse_error(
     parser.expr,
     "-+(123)",
-    "Expected a unary op `! , -` but saw +",
+    "Expected an open parens but saw - "
+      <> "\n Expected a literal `Number , String , true , false , nil` but saw - "
+      <> "\n Expected an open parens but saw + "
+      <> "\n Expected a literal `Number , String , true , false , nil` but saw + "
+      <> "\n Expected a unary op `! , -` but saw +",
   )
 }
 
@@ -164,18 +192,22 @@ pub fn parse_literal_fails_result_in_informative_messages_test() {
   expect_parse_error(
     parser.expr,
     "apple",
-    "Expected a unary op `! , -` but saw identifier `apple`",
+    "Expected an open parens but saw identifier `apple` \n Expected a literal `Number , String , true , false , nil` but saw identifier `apple` \n Expected a unary op `! , -` but saw identifier `apple`",
   )
-  expect_parse_error(parser.expr, "*", "Expected a unary op `! , -` but saw *")
+  expect_parse_error(
+    parser.expr,
+    "*",
+    "Expected an open parens but saw * \n Expected a literal `Number , String , true , false , nil` but saw * \n Expected a unary op `! , -` but saw *",
+  )
   expect_parse_error(
     parser.expr,
     "var x = 123;",
-    "Expected a unary op `! , -` but saw keyword `var`",
+    "Expected an open parens but saw keyword `var` \n Expected a literal `Number , String , true , false , nil` but saw keyword `var` \n Expected a unary op `! , -` but saw keyword `var`",
   )
 }
 
 fn expect_parse_error(parser, input, err_msg) {
-  assert run(parser, input) == Error(err_msg)
+  assert run(parser, input) == Error(err_msg, committed: False)
 }
 
 fn run(parser, input) {

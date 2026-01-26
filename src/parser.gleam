@@ -1,4 +1,5 @@
 import expr.{type Expr}
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import parser_combinators.{type Parser} as parse
 import scanner.{type Token, token_to_string} as s
@@ -19,39 +20,96 @@ pub fn expr() -> Parser(Token, expr.Expr) {
   equality()
 }
 
+/// Check if a token is a "primary" token that can never be an operator.
+/// Used for context-aware strict checking in `many_with_seperator`.
+///
+/// ## Primary Tokens
+///
+/// A token is "primary" if it can **only** start a new value expression and
+/// can **never** be an operator (binary or unary) in any context.
+///
+/// ### Primary tokens in Lox:
+/// - **NUMBER** (e.g., `123`, `45.67`) - always a literal value
+/// - **STRING** (e.g., `"hello"`) - always a literal value
+/// - **IDENTIFIER** (e.g., `apple`, `foo`) - variable reference (not valid in Lox yet, but never an operator)
+/// - **TRUE/FALSE/NIL** - boolean and null literals
+/// - **LEFT_PAREN** `(` - starts a grouping expression
+///
+/// ### Non-primary tokens (ambiguous):
+/// - **MINUS** `-` - can be binary operator (`1 - 2`) OR unary operator (`-3`)
+/// - **BANG** `!` - can be unary operator (`!true`) in some contexts
+/// - **RIGHT_PAREN** `)` - ends expression, handled separately
+/// - **SEMICOLON**, **COMMA** - statement/argument separators, not value starters
+///
+/// ## Why this matters
+///
+/// When parsing `1 * 2 X`:
+/// - If `X` is `3` (NUMBER) → definitely missing operator! Error.
+/// - If `X` is `-` (MINUS) → could be valid at higher precedence. Don't error yet.
+///
+/// This distinction is what makes context-aware strict checking work without
+/// breaking valid expressions like `1 * 2 - 3`.
+fn is_primary_token(token: Token) -> Bool {
+  case token {
+    s.Literal(s.Number(_), _) -> True
+    s.Literal(s.String(_), _) -> True
+    s.Literal(s.Identifer(_), _) -> True
+    s.Keyword(s.LTrue, _) -> True
+    s.Keyword(s.LFalse, _) -> True
+    s.Keyword(s.LNil, _) -> True
+    s.Punctuation(s.LeftParen, _) -> True
+    _ -> False
+  }
+}
+
+/// Helper to parse binary operator chains: `value (op value)*`
+/// Parses first value, then zero or more (operator, value) pairs, and folds them into a Binary expression tree.
+fn binary_op_chain(
+  value_parser: Parser(Token, Expr),
+  seperator_parser: Parser(Token, expr.BinaryOp),
+) -> Parser(Token, Expr) {
+  use #(first, pairs) <- parse.then(parse.many_with_seperator(
+    value_parser: value_parser,
+    seperator_parser: seperator_parser,
+    is_unexpected: is_primary_token,
+  ))
+  parse.return(
+    list.fold(pairs, first, fn(left, pair) {
+      let #(op, right) = pair
+      expr.Binary(op, left, right)
+    }),
+  )
+}
+
 /// Implement grammar rule  `equality       → comparison ( ( "!=" | "==" ) comparison )* ;`
 pub fn equality() -> Parser(Token, Expr) {
-  parse.many_with_seperator(
-    value_parser: comparison(),
-    seperator_parser: parse.one_token() |> parse.choose(token_as_equals_or_non),
-    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
+  binary_op_chain(
+    comparison(),
+    parse.one_token() |> parse.choose(token_as_equals_or_non),
   )
 }
 
 /// Implement grammar rule  `comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;`
 pub fn comparison() -> Parser(Token, Expr) {
-  parse.many_with_seperator(
-    value_parser: term(),
-    seperator_parser: parse.one_token() |> parse.choose(token_as_comparison),
-    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
+  binary_op_chain(
+    term(),
+    parse.one_token() |> parse.choose(token_as_comparison),
   )
 }
 
 /// Implement grammar rule `term           → factor ( ( "-" | "+" ) factor )* ;`
 pub fn term() -> Parser(Token, Expr) {
-  parse.many_with_seperator(
-    value_parser: factor(),
-    seperator_parser: parse.one_token() |> parse.choose(token_as_minus_or_plus),
-    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
+  binary_op_chain(
+    factor(),
+    parse.one_token() |> parse.choose(token_as_minus_or_plus),
   )
 }
 
 /// Implement grammar rule `factor         → unary ( ( "/" | "*" ) unary )* `
 pub fn factor() -> Parser(Token, Expr) {
-  parse.many_with_seperator(
-    value_parser: unary(),
-    seperator_parser: parse.one_token() |> parse.choose(token_as_div_or_mult),
-    combiner: fn(l, op, r) { expr.Binary(op, l, r) },
+  binary_op_chain(
+    unary(),
+    parse.one_token() |> parse.choose(token_as_div_or_mult),
   )
 }
 

@@ -1,5 +1,4 @@
 import gleam
-import scanner.{type Token}
 
 /// A parser really has two jobs:
 ///
@@ -43,19 +42,23 @@ import scanner.{type Token}
 pub type ParseResult(token, value) {
   Success(found: value, unconsumed: List(token))
 
-  /// This reports an error at a given token. It shows the token’s location and the token itself. 
+  /// This reports an error at a given token. It shows the token's location and the token itself.
   /// This will come in handy later since we use tokens throughout the interpreter to track locations in code.
-  /// 
-  /// This is a simple sentinel class we use to unwind the parser. 
-  /// The error() method returns the error instead of throwing it because we want to let the calling 
-  /// method inside the parser decide whether to unwind or not. 
-  /// Some parse errors occur in places where the parser isn’t likely to get into a weird state 
-  /// and we don’t need to synchronize. In those places, we simply report the error and keep on truckin’.
+  ///
+  /// This is a simple sentinel class we use to unwind the parser.
+  /// The error() method returns the error instead of throwing it because we want to let the calling
+  /// method inside the parser decide whether to unwind or not.
+  /// Some parse errors occur in places where the parser isn't likely to get into a weird state
+  /// and we don't need to synchronize. In those places, we simply report the error and keep on truckin'.
+  ///
+  /// The `committed` flag implements Prolog's cut operator (!): When `True`, the `or` combinator
+  /// will NOT try alternatives. This prevents backtracking after commitment points.
   Error(
     // line: Int,
     // If we have a token in-hand, but it's not what we expect, then let's report it in the erorr message
     //  while_looking_at: Option(token),
     message: String,
+    committed: Bool,
   )
 }
 
@@ -99,56 +102,338 @@ fn synchronize() {
 pub type Parser(token, value) =
   fn(List(token)) -> ParseResult(token, value)
 
+/// The parser that always fails, with the given `reason`.
+/// The error is not committed (allows backtracking via `or`).
+pub fn error(reason) -> Parser(token, value) {
+  fn(_input) { Error(reason, committed: False) }
+}
+
+/// The parser that always fails with a **committed** error (prevents backtracking).
+///
+/// Like `error(reason)`, but the error is committed, so `or` will NOT try alternatives.
+/// Use this when you've detected a real syntax error that must be reported.
+///
+/// ## Examples
+///
+/// ```gleam
+/// // Without abort: tries alternatives, confusing errors
+/// { identifier_parser } |> or({ number_parser })
+/// // Input: "+" → Error("Expected identifier \n Expected number")
+///
+/// // With abort: stops immediately, clear error
+/// {
+///   use next <- get(peek())
+///   case next {
+///     Operator -> abort("Expected value but saw operator")
+///     _ -> identifier_parser
+///   }
+/// }
+/// // Input: "+" → Error("Expected value but saw operator")
+/// ```
+pub fn abort(reason) -> Parser(token, value) {
+  fn(_input) { Error(reason, committed: True) }
+}
+
+/// Commit: Mark errors as committed after the parser succeeds (like Prolog's ! operator).
+///
+/// tldr:
+///   - If first_parser fails → error is NOT committed (allows or to try when_error)
+///   - If first_parser succeeds → we're committed, any subsequent failure is non-backtrackable
+/// 
+/// This is a higher-order combinator designed for use with `use`-syntax. After `parser`
+/// succeeds, runs `continuation` with the parsed value. Any errors from the continuation
+/// are marked as committed (no backtracking).
+///
+/// **Semantics**:
+/// 1. If `parser` fails → propagate error as-is (not committed yet, we never entered this path)
+/// 2. If `parser` succeeds → run `continuation(value)`, marking any errors as `committed: True`
+///
+/// ## Examples
+///
+/// ```gleam
+/// // Without commit: tries all alternatives, confusing errors
+/// let statement = if_stmt |> or(while_stmt) |> or(other_stmt)
+/// // Input: "if 123" (invalid expr)
+/// // Error: "Expected identifier" (tries other_stmt after if_stmt fails!)
+///
+/// // With commit: stops at first match, clear errors
+/// let if_stmt = {
+///   use _ <- commit(keyword("if"))  // After parsing "if", we're committed!
+///   use expr <- get(expression())   // If this fails, error is committed
+///   use stmt <- get(statement())
+///   return(IfStmt(expr, stmt))
+/// }
+/// let statement = if_stmt |> or(while_stmt) |> or(other_stmt)
+/// // Input: "if 123"
+/// // Error: "Expected expression" (clear! doesn't try other alternatives)
+/// ```
+pub fn commit(
+  parser: Parser(token, a),
+  continuation: fn(a) -> Parser(token, b),
+) -> Parser(token, b) {
+  fn(tokens) {
+    case parser(tokens) {
+      Error(msg, committed) -> Error(msg, committed)
+      // Propagate parser error as-is
+      Success(found, unconsumed) -> {
+        // Parser succeeded, now we're committed to this parse path
+        case continuation(found)(unconsumed) {
+          Error(msg, committed: _) -> Error(msg, committed: True)
+          // Mark as committed!
+          success -> success
+        }
+      }
+    }
+  }
+}
+
 /// Implement the grammar rule `value (seperator value)*`
 /// then combine the results via `combiner`.
-/// ### Examples
-/// + Commas: `1, 2, 3`
-/// + Terms:  `1 + 2 + 3`
-/// + Terms:  `1 + 2 - 3`, the separator parser parses `+` or `-`
+///
+/// ## Parameters
+///
+/// - `value_parser` - Parser for the values being separated
+/// - `seperator_parser` - Parser for the separator tokens (operators like `+`, `-`, etc.)
+/// - `combiner` - Function to combine `left separator right` into a result
+/// - `primary_checker` - Function that returns `True` if a token can **never** be an operator
+///   (used for context-aware error detection)
+///
+/// ## Error Handling Strategy
+///
+/// This combinator uses **two-level error detection** to catch different kinds of mistakes:
+///
+/// ### 1. Separator succeeded but value failed → propagate error
+///
+/// When we successfully parse a separator (like `+`), we commit to parsing the following value.
+/// If that fails, we propagate the error instead of rolling back.
+///
+/// ```gleam
+/// "1 + apple"  // After parsing `+`, must parse a value
+///              // `apple` fails → Error("Expected a unary op... but saw identifier")
+/// ```
+///
+/// ### 2. No separator found → context-aware checking for missing operators
+///
+/// After parsing a value, if we don't find a separator, we check the next token using
+/// `primary_checker`:
+///
+/// - **Primary token** (returns `True`) → ERROR: "Expected operator between values"
+/// - **Non-primary token or end of input** (returns `False`) → SUCCESS (done parsing at this level)
+///
+/// #### Why we need context-aware checking (the operator ambiguity problem)
+///
+/// We can't simply check "can another value be parsed?" because of **operator ambiguity** in
+/// expression grammars. Some tokens (like `-` and `!`) can be both:
+/// 1. Binary operators (separators at this level)
+/// 2. Unary operators (part of values at lower levels)
+///
+/// **Example of the problem:**
+///
+/// ```gleam
+/// "1 * 2 - 3"  // After factor() parses "1 * 2"
+///              // Can we parse another factor from "- 3"?
+///              // YES! Because `-` starts a unary expression (like -3)
+///              // But `-` is actually the BINARY MINUS at the term level!
+///              // If we naively error here, we break valid code.
+/// ```
+///
+/// **Solution: Primary token checking via `primary_checker`**
+///
+/// The `primary_checker` function identifies tokens that can **never** be operators at any
+/// precedence level (e.g., NUMBER, STRING, IDENTIFIER, LEFT_PAREN). So:
+///
+/// ```gleam
+/// "1 * 2 3"    // After "1 * 2", next token is `3` (NUMBER)
+///              // primary_checker(3) → True (NUMBER is primary)
+///              // → Error("Expected operator between values")
+///
+/// "1 * 2 - 3"  // After "1 * 2", next token is `-` (OPERATOR)
+///              // primary_checker(-) → False (OPERATOR is not primary)
+///              // → Success, let term() handle the `-`
+/// ```
+///
+/// ## Examples
+///
+/// ```gleam
+/// // Valid expressions
+/// many_with_seperator(factor, plus_or_minus, combine, is_primary)("1 + 2 + 3")
+/// // → Success(((1 + 2) + 3), [])
+///
+/// many_with_seperator(factor, times_or_div, combine, is_primary)("1 * 2 - 3")
+/// // → Success((1 * 2), [-, 3])  // `-` handled at term level
+///
+/// // Invalid expressions
+/// many_with_seperator(factor, times_or_div, combine, is_primary)("1 * 2 3")
+/// // → Error("Expected operator between values")  // `3` is primary!
+///
+/// many_with_seperator(factor, times_or_div, combine, is_primary)("1 * apple")
+/// // → Error("Expected a unary op... but saw identifier")  // separator committed
+/// ```
+/// 
+/// Note: `is_unexpected` should be "disjoint" from `value_parser` and `seperator_parser`.
 pub fn many_with_seperator(
   value_parser value_parser: Parser(token, value),
   seperator_parser seperator_parser: Parser(token, seperator),
-  combiner combiner: fn(value, seperator, value) -> value,
-) {
-  use left <- get(value_parser)
-  use continuations: List(fn(value) -> value) <- get(
+  is_unexpected is_unexpected: fn(token) -> Bool,
+) -> Parser(token, #(value, List(#(seperator, value)))) {
+  use first <- then(value_parser)
+  use pairs <- then(
+    // Try to parse separator + value
     {
-      use sep <- get(seperator_parser)
+      use sep <- commit(seperator_parser)
+      // We're committed to the rest of this parser; ie no trailing seperators allowed!
       use right <- get(value_parser)
-      return(fn(l) { combiner(l, sep, right) })
+      return(#(sep, right))
     }
+    // If separator fails, check if next token is something unexpected
+    |> or({
+      use next_token <- get(peek_one_token())
+      // The message `""` doesn't matter because `star` **ignores the message in uncommitted errors**.
+      // It just sees `Error(_, committed: False)` and thinks "OK, we're done here" and stops.
+      //
+      // The error message ONLY matters when the error propagates to the user. Since `star`
+      // catches all uncommitted errors and converts them to success, the message never reaches
+      // anyone.
+      //
+      // **Key insight**: `star` treats ALL uncommitted errors as "done parsing", regardless
+      // of what the error message says. The message is irrelevant.      
+      use <- when(is_unexpected(next_token), "")
+      abort("Expected separator between values")
+    })
     |> star,
   )
-  return(compose(continuations)(left))
+
+  // Return first value and list of (separator, value) pairs
+  return(#(first, pairs))
 }
 
-fn compose(functions: List(fn(t) -> t)) -> fn(t) -> t {
-  case functions {
-    [] -> fn(e) { e }
-    [f, ..fs] -> fn(e) { e |> f |> compose(fs) }
+/// Parse zero or more occurrences of `parser`, collecting results in a list.
+///
+/// ## What it does (simple version)
+///
+/// Imagine you're collecting marbles from a jar. You keep taking marbles one by one
+/// until either:
+/// - You run out of marbles (that's OK! Just stop)
+/// - Something goes seriously wrong (that's an error! Stop and tell someone)
+///
+/// `star` does the same thing with parsing: keep parsing until you can't anymore,
+/// then return what you collected.
+///
+/// ## The three cases (how it handles different results)
+///
+/// 1. **`Success(value, rest)`** → "Found a marble! Keep going."
+///    - Adds `value` to the list and recursively parses `rest`
+///
+/// 2. **`Error(_, committed: False)`** → "No more marbles, that's fine!"
+///    - Stops gracefully and returns everything collected so far
+///    - **This is the key trick**: uncommitted error = "I'm done (successfully)"
+///
+/// 3. **`Error(msg, committed: True)`** → "Something's broken!"
+///    - Propagates the error immediately (real problem that must be reported)
+///
+/// ## The `error("")` trick (important!)
+///
+/// When you want to tell `star` "I'm done parsing, please stop", you return an
+/// **uncommitted error** (even if nothing went wrong). Think of it as a secret
+/// handshake that means "all done here, thanks!"
+///
+/// ```gleam
+/// star({
+///   digit_parser           // Try to parse a digit
+///   |> or(error(""))       // If not a digit, signal "I'm done" (not an error!)
+/// })
+/// // Input: "123abc" → Success([1, 2, 3], "abc")  ← Stopped at 'a', no error!
+/// ```
+///
+/// The empty string `""` is just a placeholder - `star` ignores uncommitted errors
+/// and just stops collecting.
+///
+/// ## Why this matters: Error message combining
+///
+/// The trick enables `or` to combine error messages from multiple alternatives:
+///
+/// ```gleam
+/// star({
+///   // Try parsing separator + value
+///   { use sep <- commit(separator_parser)
+///     use val <- get(value_parser)
+///     return(#(sep, val)) }
+///   // If separator fails, check WHY
+///   |> or({
+///     use next <- get(peek())
+///     case next {
+///       PrimaryToken -> abort("Expected separator")  // Real error!
+///       OperatorToken -> halt_star_repetition()  // Done parsing (this is fine)
+///     }
+///   })
+/// })
+/// ```
+///
+/// When all alternatives fail:
+/// - Separator failed: `Error("Expected `/` but saw 3", committed: False)`
+/// - Primary check: `Error("Expected separator...", committed: True)`
+/// - `or` combines them: `"Expected separator... \n Expected `/` but saw 3"`
+/// - Committed error propagates with BOTH messages!
+///
+/// ## Examples
+///
+/// ### Example 1: Parse digits (simple)
+/// ```gleam
+/// star(digit_parser)
+/// // "123abc" → Success([1, 2, 3], "abc")
+/// // "abc" → Success([], "abc")  ← Zero digits is OK!
+/// ```
+///
+/// ### Example 2: Parse with a stopping condition
+/// ```gleam
+/// star({
+///   operator_parser  // Try to parse operator
+///   |> or({
+///     use next <- get(peek())
+///     case next {
+///       Semicolon -> halt_star_repetition()  // Stop here (done with expression)
+///       _ -> abort("Expected operator")  // Real error
+///     }
+///   })
+/// })
+/// ```
+///
+/// ### Example 3: The separator+value pattern (actual use case)
+/// See `many_with_seperator` for a real example of this pattern in action!
+///
+/// ## Common pattern: When to use halt_star_repetition vs abort
+///
+/// - **`halt_star_repetition()`**: "I'm done parsing, this is expected"
+///   - Use when: End of input, wrong precedence level, valid stopping point
+///   - Effect: `star` stops gracefully, returns collected results
+///
+/// - **`abort(msg)`**: "Something's wrong!"
+///   - Use when: Missing required syntax, invalid token where valid one expected
+///   - Effect: Propagates immediately, tells user what went wrong
+fn star(parser: Parser(token, a)) -> Parser(token, List(a)) {
+  {
+    use value <- get(parser)
+    use rest <- get(star(parser))
+    return([value, ..rest])
   }
+  |> or(return([]))
 }
 
-/// Parses the largest prefix (of the input token stream) that is parserable by `parser`.
-/// **This parser never fails!**
-fn star(parser: Parser(token, value)) -> Parser(token, List(value)) {
-  fn(tokens) {
-    case parser(tokens) {
-      Error(_) -> Success(found: [], unconsumed: tokens)
-      Success(v, unconsumed:) ->
-        case star(parser)(unconsumed) {
-          Error(_) -> Success([v], unconsumed)
-          Success(vs, unconsumed:) -> Success([v, ..vs], unconsumed)
-        }
-    }
-  }
-}
-
-pub fn one_token() -> Parser(Token, Token) {
+pub fn one_token() -> Parser(token, token) {
   fn(tokens) {
     case tokens {
       [t, ..ts] -> Success(found: t, unconsumed: ts)
-      [] -> Error("No token to parse!")
+      [] -> Error("No token to parse!", committed: False)
+    }
+  }
+}
+
+/// Like `one_token` but only peeks at the next token and does not consume any input at all!
+pub fn peek_one_token() -> Parser(token, token) {
+  fn(tokens) {
+    case tokens {
+      [t, ..] -> Success(found: t, unconsumed: tokens)
+      [] -> Error("No token to parse!", committed: False)
     }
   }
 }
@@ -167,7 +452,7 @@ pub fn when(
 ) -> Parser(token, value) {
   case condition {
     True -> continue()
-    False -> fn(_unconsumed) { Error(message) }
+    False -> error(message)
   }
 }
 
@@ -181,7 +466,7 @@ fn filter(
       Success(found, _) as done ->
         case predicate(found) {
           True -> done
-          False -> Error(failure_message)
+          False -> Error(failure_message, committed: False)
         }
       err -> err
     }
@@ -197,7 +482,9 @@ fn unwrap_result(
   continue: fn(b) -> Parser(token, c),
 ) -> Parser(token, c) {
   case result {
-    gleam.Error(failure_message) -> fn(_unconsumed) { Error(failure_message) }
+    gleam.Error(failure_message) -> fn(_unconsumed) {
+      Error(failure_message, committed: False)
+    }
     Ok(b) -> continue(b)
   }
 }
@@ -210,11 +497,13 @@ pub fn choose(
 ) -> Parser(token, value_b) {
   fn(tokens) {
     case parser(tokens) {
-      Error(msg) -> Error(msg)
+      Error(msg, committed) -> Error(msg, committed)
+      // Propagate error with commit flag
       Success(found:, unconsumed:) ->
         case selector(found) {
           Ok(found) -> Success(found, unconsumed)
-          gleam.Error(failure_message) -> Error(failure_message)
+          gleam.Error(failure_message) ->
+            Error(failure_message, committed: False)
         }
     }
   }
@@ -226,21 +515,27 @@ pub fn map(
 ) -> Parser(token, value_b) {
   fn(tokens) {
     case parser(tokens) {
-      Error(msg) -> Error(msg)
+      Error(msg, committed) -> Error(msg, committed)
+      // Propagate error with commit flag
       Success(found, unconsumed) -> Success(mapper(found), unconsumed)
     }
   }
 }
 
 /// Run the `main` parser but if it fails then run the `fallback` parser.
+///
+/// **Commit semantics**: If `main` returns `Error(..., committed: True)`, we've committed
+/// to that parse path and will NOT try `fallback`. This prevents backtracking after commitment points.
 pub fn or(main: Parser(a, b), fallback: Parser(a, b)) -> Parser(a, b) {
   fn(tokens) {
     case main(tokens) {
-      Error(_) as first_error ->
+      Error(_, committed: True) as committed_error -> committed_error
+      // Don't try fallback after commit!
+      Error(msg, committed: False) ->
         case fallback(tokens) {
-          Error(_) -> first_error
-          // Show first failing message, when everything fails.
-          // 🤔 We probably want to aggregate errors!
+          Error(second_message, committed: second_committed) ->
+            // Show all messages when things fail! (In reverse order).
+            Error(second_message <> " \n " <> msg, committed: second_committed)
           success -> success
         }
       success -> success
@@ -255,7 +550,8 @@ pub fn then(
 ) -> Parser(token, b) {
   fn(tokens) {
     case first(tokens) {
-      Error(message) -> Error(message)
+      Error(message, committed) -> Error(message, committed)
+      // Propagate error with commit flag
       Success(found, unconsumed) -> then(found)(unconsumed)
     }
   }
@@ -264,4 +560,14 @@ pub fn then(
 /// An alias for `then` that makes code involving `use` more readable
 fn get(first, callback) {
   then(first, callback)
+}
+
+/// Gets a parser that succeeds if and only if the original parser has consumed all of its input.
+pub fn input_all_consumed(parser: Parser(token, value)) -> Parser(token, value) {
+  fn(tokens) {
+    case parser(tokens) {
+      Success(_, [_, ..]) -> Error("Expected end of input", committed: False)
+      all_good -> all_good
+    }
+  }
 }
