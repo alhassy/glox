@@ -1,5 +1,8 @@
+import evaluator
 import gleam/io
 import gleam/string
+import parser
+import parser_combinators.{Success}
 import scanner
 
 import argv
@@ -34,7 +37,9 @@ pub fn run(line) {
   case string.trim(line) {
     "exit" -> Nil
     text -> {
-      echo scanner.scan_tokens(text, 0)
+      let assert Ok(tokens) = scanner.scan_tokens(text, 0)
+      let assert Success(found: expr, unconsumed: _) = parser.expr()(tokens)
+      io.println(string.inspect(evaluator.eval(expr)))
       run_repl_prompt()
     }
   }
