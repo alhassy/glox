@@ -1,17 +1,31 @@
 // Tests for error reporting - both parse-time and runtime errors
 
 import error_formatter
-import evaluator
+import expr.{Literal, Number}
 import gleam/int
 import gleam/list
 import gleam/string
 import gleeunit
-import parser_combinators.{Error as ParseError, Success}
-import program
-import type_error.{RuntimeError}
+import parser_combinators.{Error as ParseError, Span, Success}
+import program.{Print, Program}
 
 pub fn main() -> Nil {
   gleeunit.main()
+}
+
+pub fn program_parser_success_test() {
+  let test_cases = [
+    #(
+      "one print statement",
+      "print 1;",
+      Program([Print(Literal(Number(1.0), Span(1, 7, 1)))]),
+    ),
+  ]
+
+  use #(description, input, expected_program) <- list.each(test_cases)
+  let assert Success(found:, remaining:) = program.parse(input) as description
+  assert remaining.unconsumed == "" as "All input consumed by program parser"
+  assert found == expected_program as description
 }
 
 pub fn program_parser_error_test() {
@@ -31,6 +45,15 @@ pub fn program_parser_error_test() {
       "┌─ Syntax error at line 1, column 6
        |
      1 | 1 + 3
+       |      ^
+       |     I expected to see a semicolon here 🤔",
+    ),
+    #(
+      "extra input after expression",
+      "true & then some extra input;",
+      "┌─ Syntax error at line 1, column 6
+       |
+     1 | true & then some extra input;
        |      ^
        |     I expected to see a semicolon here 🤔",
     ),

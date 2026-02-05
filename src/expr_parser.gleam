@@ -39,7 +39,6 @@ pub fn parser() -> Parser(Expr) {
   use _ <- parse.get(skip_ws())
   use expr <- parse.get(expression())
   use _ <- parse.get(skip_ws())
-  use _ <- parse.get(parse.eof())
   parse.return(expr)
 }
 

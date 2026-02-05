@@ -120,15 +120,6 @@ pub fn parser_error_formatted_test() {
        |     Expected a number, string, or expression after operator",
     ),
     #(
-      "extra input after expression",
-      "true & then some extra input",
-      "┌─ Syntax error at line 1, columns 6-28
-       |
-     1 | true & then some extra input
-       |      ^^^^^^^^^^^^^^^^^^^^^^^
-       |     Unexpected input after expression",
-    ),
-    #(
       "extra input on line 3",
       "1 +\n2 *\n3 oops",
       "┌─ Syntax error at line 3, columns 3-6
