@@ -1,8 +1,11 @@
-import expr.{type Expr}
+import expr.{
+  type Expr, type Operator, AtLeast, AtMost, Boolean, BooleanNegation, Divides,
+  Equals, GreaterThan, Grouping, LessThan, Literal, Minus, Nil as LitNil,
+  NotEquals, Number, NumericNegation, Op, Plus, String, Times,
+}
 import gleam/list
-import gleam/option.{type Option, None, Some}
-import parser_combinators.{type Parser} as parse
-import scanner.{type Token, token_to_string} as s
+import gleam/string
+import parser_combinators as parse
 
 /// A Gleam parser for the following grammar.
 /// ```
@@ -16,225 +19,197 @@ import scanner.{type Token, token_to_string} as s
 /// primary        → NUMBER | STRING | "true" | "false" | "nil"
 ///                | "(" expression ")" ;
 /// ```
-pub fn expr() -> Parser(Token, expr.Expr) {
+/// Parse an expression from source text with position tracking for error messages.
+///
+/// ## Example
+/// ```gleam
+/// case parse("1 + @ 2") {
+///   parse.Success(expr, _) -> // ... use expr
+///   parse.Error(msg, line, col, _) ->
+///     io.println(parsetime_error.format_error(msg, source, line, col))
+/// }
+/// ```
+pub fn parse(source: String) -> parse.ParseResult(Expr) {
+  source
+  |> parse.input_from_string
+  |> {
+    use _ <- parse.get(skip_ws())
+    use expr <- parse.get(expression())
+    use _ <- parse.get(skip_ws())
+    use _ <- parse.get(parse.eof())
+    parse.return(expr)
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Whitespace handling
+// ----------------------------------------------------------------------------
+
+fn skip_ws() -> parse.Parser(Nil) {
+  parse.whitespace()
+  |> parse.or(parse.line_comment("//"))
+  |> parse.or(parse.text_delimited("/*", "*/"))
+  |> parse.star
+  |> parse.map(fn(_) { Nil })
+}
+
+/// Parse a token and consume/skip trailing whitespace & comments.
+///
+/// A lexeme is a meaningful unit of syntax (like a number, identifier, or operator)
+/// followed by any whitespace. This is the standard approach to handling whitespace
+/// in parsers: consume it after each token, not before.
+///
+/// ```gleam
+/// // Parse "42" and skip any trailing spaces/tabs/newlines
+/// lexeme(number())
+/// ```
+fn lexeme(parser: parse.Parser(a)) -> parse.Parser(a) {
+  use result <- parse.get(parser)
+  use _ <- parse.get(skip_ws())
+  parse.return(result)
+}
+
+// ----------------------------------------------------------------------------
+// Grammar rules
+// ----------------------------------------------------------------------------
+
+fn expression() -> parse.Parser(Expr) {
   equality()
 }
 
-/// Check if a token is a "primary" token that can never be an operator.
-/// Used for context-aware strict checking in `many_with_seperator`.
-///
-/// ## Primary Tokens
-///
-/// A token is "primary" if it can **only** start a new value expression and
-/// can **never** be an operator (binary or unary) in any context.
-///
-/// ### Primary tokens in Lox:
-/// - **NUMBER** (e.g., `123`, `45.67`) - always a literal value
-/// - **STRING** (e.g., `"hello"`) - always a literal value
-/// - **IDENTIFIER** (e.g., `apple`, `foo`) - variable reference (not valid in Lox yet, but never an operator)
-/// - **TRUE/FALSE/NIL** - boolean and null literals
-/// - **LEFT_PAREN** `(` - starts a grouping expression
-///
-/// ### Non-primary tokens (ambiguous):
-/// - **MINUS** `-` - can be binary operator (`1 - 2`) OR unary operator (`-3`)
-/// - **BANG** `!` - can be unary operator (`!true`) in some contexts
-/// - **RIGHT_PAREN** `)` - ends expression, handled separately
-/// - **SEMICOLON**, **COMMA** - statement/argument separators, not value starters
-///
-/// ## Why this matters
-///
-/// When parsing `1 * 2 X`:
-/// - If `X` is `3` (NUMBER) → definitely missing operator! Error.
-/// - If `X` is `-` (MINUS) → could be valid at higher precedence. Don't error yet.
-///
-/// This distinction is what makes context-aware strict checking work without
-/// breaking valid expressions like `1 * 2 - 3`.
-fn is_primary_token(token: Token) -> Bool {
-  case token {
-    s.Literal(s.Number(_), _) -> True
-    s.Literal(s.String(_), _) -> True
-    s.Literal(s.Identifer(_), _) -> True
-    s.Keyword(s.LTrue, _) -> True
-    s.Keyword(s.LFalse, _) -> True
-    s.Keyword(s.LNil, _) -> True
-    s.Punctuation(s.LeftParen, _) -> True
-    _ -> False
-  }
+fn equality() -> parse.Parser(Expr) {
+  binary_chain(comparison(), [#("!=", NotEquals), #("==", Equals)])
 }
 
-/// Helper to parse binary operator chains: `value (op value)*`
-/// Parses first value, then zero or more (operator, value) pairs, and folds them into a Binary expression tree.
-fn binary_op_chain(
-  value_parser: Parser(Token, Expr),
-  seperator_parser: Parser(Token, expr.BinaryOp),
-) -> Parser(Token, Expr) {
-  use #(first, pairs) <- parse.then(parse.many_with_seperator(
-    value_parser: value_parser,
-    seperator_parser: seperator_parser,
-    is_unexpected: is_primary_token,
-  ))
-  parse.return(
-    list.fold(pairs, first, fn(left, pair) {
-      let #(op, right) = pair
-      expr.Binary(op, left, right)
-    }),
+fn comparison() -> parse.Parser(Expr) {
+  let ops = [
+    #("<=", AtMost),
+    #(">=", AtLeast),
+    #("<", LessThan),
+    #(">", GreaterThan),
+  ]
+  binary_chain(term(), ops)
+}
+
+fn term() -> parse.Parser(Expr) {
+  binary_chain(factor(), [#("+", Plus), #("-", Minus)])
+}
+
+fn factor() -> parse.Parser(Expr) {
+  binary_chain(unary(), [#("*", Times), #("/", Divides)])
+}
+
+/// Binary operator chain.
+/// Implements: value (op value)*
+fn binary_chain(
+  value_parser: parse.Parser(Expr),
+  ops: List(#(String, Operator)),
+) -> parse.Parser(Expr) {
+  parse.left_assoc(
+    over: value_parser,
+    operators: operator_parser(ops),
+    or_error: "Expected a number, string, or expression after operator",
   )
+  |> parse.map_with_span(binary_ops)
 }
 
-/// Implement grammar rule  `equality       → comparison ( ( "!=" | "==" ) comparison )* ;`
-pub fn equality() -> Parser(Token, Expr) {
-  binary_op_chain(
-    comparison(),
-    parse.one_token() |> parse.choose(token_as_equals_or_non),
-  )
+// Make an `Expr` out of `first op1 second op2 third op3 ...`
+fn binary_ops(
+  first_and_pairs: #(Expr, List(#(Operator, Expr))),
+  span: parse.Span,
+) -> Expr {
+  let #(first, pairs) = first_and_pairs
+  list.fold(pairs, first, fn(left, pair) {
+    let #(op, right) = pair
+    Op(op, [left, right], span)
+  })
 }
 
-/// Implement grammar rule  `comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;`
-pub fn comparison() -> Parser(Token, Expr) {
-  binary_op_chain(
-    term(),
-    parse.one_token() |> parse.choose(token_as_comparison),
-  )
+/// Operator parser that also detects missing operators between values
+fn operator_parser(
+  ops: List(#(String, a)),
+) -> fn(parse.Input) -> parse.ParseResult(a) {
+  let expected =
+    ops
+    |> list.map(fn(pair) { "`" <> pair.0 <> "`" })
+    |> string.join(", ")
+
+  parse.tokenize(ops)
+  |> lexeme
+  |> parse.or({
+    use next <- parse.get(parse.peek())
+    case unexpected_char(next) {
+      False -> parse.error("")
+      True ->
+        parse.word()
+        |> parse.then_with_span(fn(token, span) {
+          parse.abort(
+            "Expected one of " <> expected <> " before `" <> token <> "`",
+          )
+          |> parse.at(span)
+        })
+    }
+  })
 }
 
-/// Implement grammar rule `term           → factor ( ( "-" | "+" ) factor )* ;`
-pub fn term() -> Parser(Token, Expr) {
-  binary_op_chain(
-    factor(),
-    parse.one_token() |> parse.choose(token_as_minus_or_plus),
-  )
+fn unexpected_char(c: String) -> Bool {
+  parse.is_digit(c) || c == "\"" || parse.is_alphanumeric(c) || c == "("
 }
 
-/// Implement grammar rule `factor         → unary ( ( "/" | "*" ) unary )* `
-pub fn factor() -> Parser(Token, Expr) {
-  binary_op_chain(
-    unary(),
-    parse.one_token() |> parse.choose(token_as_div_or_mult),
-  )
+/// `! /* hello world*/ true` ==> `Boolean(False)`
+fn unary() -> parse.Parser(Expr) {
+  [#("!", BooleanNegation), #("-", NumericNegation)]
+  |> parse.tokenize
+  |> lexeme
+  |> parse.then_with_span(fn(op, span) {
+    unary() |> parse.map(fn(inner) { Op(op, [inner], span) })
+  })
+  |> parse.or(primary())
 }
 
-fn token_as_div_or_mult(it: Token) -> Result(expr.BinaryOp, String) {
-  case it {
-    s.Operator(s.Division, _) -> Some(expr.Divides)
-    s.Operator(s.Times, _) -> Some(expr.Times)
-    _ -> None
-  }
-  |> expecting(it, to_be: "the binary operator `/` or `*`")
-}
-
-fn token_as_minus_or_plus(it: Token) -> Result(expr.BinaryOp, String) {
-  case it {
-    s.Operator(s.Minus, _) -> Some(expr.Minus)
-    s.Operator(s.Plus, _) -> Some(expr.Plus)
-    _ -> None
-  }
-  |> expecting(it, to_be: "the binary operator `-` or `+`")
-}
-
-fn token_as_comparison(it: Token) -> Result(expr.BinaryOp, String) {
-  case it {
-    s.Operator(s.LessThan, _) -> Some(expr.LessThan)
-    s.Operator(s.AtMost, _) -> Some(expr.AtMost)
-    s.Operator(s.GreaterThan, _) -> Some(expr.GreaterThan)
-    s.Operator(s.AtLeast, _) -> Some(expr.AtLeast)
-    _ -> None
-  }
-  |> expecting(it, to_be: "a comparison operator `>, >=, <, <=`")
-}
-
-fn token_as_equals_or_non(it: Token) -> Result(expr.BinaryOp, String) {
-  case it {
-    s.Operator(s.Equal, _) -> Some(expr.Equals)
-    s.Operator(s.NotEqual, _) -> Some(expr.NotEquals)
-    _ -> None
-  }
-  |> expecting(it, to_be: "an equality operator `==` or `!=`")
-}
-
-/// Implement grammar rule `unary   →   ( "!" | "-" ) unary  |  primary`
-pub fn unary() -> Parser(Token, expr.Expr) {
-  parse.one_token()
-  |> parse.choose(token_as_expr_unary_op)
-  |> parse.then(fn(op) { unary() |> parse.map(expr.Unary(op, _)) })
-  |> parse.or(literal())
+fn primary() -> parse.Parser(Expr) {
+  literal()
   |> parse.or(grouping())
-}
-
-fn token_as_expr_unary_op(it: Token) -> Result(expr.UnaryOp, String) {
-  case it {
-    s.Operator(s.Negation, _) -> expr.BooleanNegation |> Some
-    s.Operator(s.Minus, _) -> expr.NumericNegation |> Some
-    _ -> None
-  }
-  |> expecting(it, to_be: "a unary op `! , -`")
+  |> lexeme
 }
 
 fn literal() {
-  parse.one_token()
-  |> parse.choose(token_as_expr_literal)
-  |> parse.map(expr.Literal)
+  parse.ordered_choice([
+    parse.number() |> parse.map(Number),
+    parse.string_literal() |> parse.map(String),
+    keyword_literal(),
+  ])
+  |> parse.map_with_span(fn(s, span) { Literal(s, span) })
 }
 
-fn token_as_expr_literal(it: Token) -> Result(expr.Literal, String) {
-  case it {
-    s.Literal(s.Number(value), _) -> value |> expr.Number |> Some
-    s.Literal(s.String(value), _) -> value |> expr.String |> Some
-    s.Keyword(s.LNil, _) -> expr.Nil |> Some
-    s.Keyword(s.LTrue, _) -> True |> expr.Boolean |> Some
-    s.Keyword(s.LFalse, _) -> False |> expr.Boolean |> Some
-    _ -> None
+fn keyword_literal() {
+  parse.identifier()
+  |> parse.then_with_span(fn(id, span) {
+    case id {
+      "true" -> parse.return(Boolean(True))
+      "false" -> parse.return(Boolean(False))
+      "nil" -> parse.return(LitNil)
+      _ ->
+        parse.abort(
+          "Unknown identifier `"
+          <> id
+          <> "`. Variables are not supported yet - only numbers, strings, true, false, and nil",
+        )
+        |> parse.at(span)
+    }
+  })
+}
+
+fn grouping() -> parse.Parser(Expr) {
+  {
+    use #(_, open_span) <- parse.commit(parse.string("(") |> parse.with_span())
+    use inner <- parse.require(expression(), "Expected expression after '('")
+    use _ <- parse.require_at(
+      expect: parse.string(")"),
+      reprimand: "Hmm, looks like you forgot to close this parenthesis!",
+      at: open_span,
+    )
+    parse.return(inner)
   }
-  |> expecting(it, to_be: "a literal `Number , String , true , false , nil`")
-}
-
-// Parse a parenthesised expression?
-fn grouping() -> Parser(Token, expr.Expr) {
-  use it <- get(parse.one_token())
-  use <- asserting(it, is_left_parens, ie: "an open parens")
-  use expr <- get(expr())
-  use it <- get(parse.one_token())
-  use <- asserting(it, is_right_parens, ie: "a closing parens")
-  parse.return(expr.Grouping(expr))
-}
-
-fn is_left_parens(token: Token) -> Bool {
-  case token {
-    s.Punctuation(s.LeftParen, _) -> True
-    _ -> False
-  }
-}
-
-fn is_right_parens(token: Token) -> Bool {
-  case token {
-    s.Punctuation(s.RightParen, _) -> True
-    _ -> False
-  }
-}
-
-/// An alias for `then` that makes code involving `use` more readable
-fn get(first, callback) {
-  parse.then(first, callback)
-}
-
-/// Instead of writing `use <- when(it |> is_foo, it |> expected("foo", _))`, write `use <- expecting_(it, is_foo, ie:, "foo")`
-fn asserting(
-  it: Token,
-  predicate: fn(Token) -> Bool,
-  continuation: fn() -> fn(List(a)) -> parse.ParseResult(a, b),
-  ie msg: String,
-) -> fn(List(a)) -> parse.ParseResult(a, b) {
-  parse.when(predicate(it), expected(msg, it), continuation)
-}
-
-fn expecting(
-  option: Option(value),
-  it token: Token,
-  to_be expectation: String,
-) -> Result(value, String) {
-  option
-  |> option.to_result(expected(it: token, to_be: expectation))
-}
-
-fn expected(to_be expected: String, it token: Token) -> String {
-  "Expected " <> expected <> " but saw " <> token_to_string(token)
+  |> parse.map_with_span(fn(inner, span) { Grouping(inner, span) })
 }

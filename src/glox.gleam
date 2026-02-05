@@ -1,9 +1,11 @@
 import evaluator
+import expr.{type Literal, Boolean, Number, String as LoxString}
 import gleam/io
 import gleam/string
 import parser
-import parser_combinators.{Success}
-import scanner
+import parser_combinators.{Error as ParseError, Success}
+import error_formatter
+import type_error.{RuntimeError}
 
 import argv
 
@@ -15,7 +17,6 @@ pub fn read_line(prompt: String) -> String
 
 /// When given a single arg, execute that Lox script; if no args are given, start a REPL session.
 pub fn main() {
-  // argv.load().arguments returns a List(String) of the arguments
   case argv.load().arguments {
     [] -> run_repl_prompt()
     [path_to_lox_script] -> run_file(path_to_lox_script)
@@ -25,22 +26,48 @@ pub fn main() {
 
 pub fn run_file(path_to_lox_script) {
   io.println("Running Lox code for " <> path_to_lox_script <> " ...")
+  panic as "This is not yet implemented 😅"
 }
 
 /// Run a prompt where users can enter and execute code one line at a time.
 pub fn run_repl_prompt() {
-  let line = read_line("lox > ")
-  run(line)
-}
-
-pub fn run(line) {
-  case string.trim(line) {
+  let source = read_line("lox > ")
+  case string.trim(source) {
     "exit" -> Nil
-    text -> {
-      let assert Ok(tokens) = scanner.scan_tokens(text, 0)
-      let assert Success(found: expr, unconsumed: _) = parser.expr()(tokens)
-      io.println(string.inspect(evaluator.eval(expr)))
+    _ -> {
+      case parser.parse(source) {
+        Success(parsed_expr, _) ->
+          case evaluator.eval(parsed_expr) {
+            Ok(value) -> format_value(value)
+            Error(RuntimeError(message, span)) ->
+              error_formatter.format_error(
+                kind: "Runtime error",
+                message:,
+                source:,
+                at: span,
+              )
+          }
+        ParseError(message, span, _) ->
+          error_formatter.format_error(
+            kind: "Syntax error",
+            message:,
+            source:,
+            at: span,
+          )
+      }
+      |> io.println
       run_repl_prompt()
     }
+  }
+}
+
+/// Format a Lox value for display in the REPL
+fn format_value(value: Literal) -> String {
+  case value {
+    LoxString(s) -> "\"" <> s <> "\""
+    Number(n) -> evaluator.number_to_string(n)
+    Boolean(True) -> "true"
+    Boolean(False) -> "false"
+    expr.Nil -> "nil"
   }
 }

@@ -1,3 +1,5 @@
+import parser_combinators.{type Span}
+
 /// A Gleam representation of the following grammar.
 /// ```
 /// expression     → literal
@@ -12,11 +14,11 @@
 /// operator       → "==" | "!=" | "<" | "<=" | ">" | ">="
 ///                | "+"  | "-"  | "*" | "/" ;
 /// ```
+
 pub type Expr {
-  Literal(Literal)
-  Unary(op: UnaryOp, expr: Expr)
-  Binary(op: BinaryOp, left: Expr, right: Expr)
-  Grouping(Expr)
+  Literal(value: Literal, span: Span)
+  Op(op: Operator, operands: List(Expr), span: Span)
+  Grouping(expr: Expr, span: Span)
 }
 
 pub type Literal {
@@ -26,12 +28,9 @@ pub type Literal {
   Nil
 }
 
-pub type UnaryOp {
+pub type Operator {
   NumericNegation
   BooleanNegation
-}
-
-pub type BinaryOp {
   Equals
   NotEquals
   LessThan

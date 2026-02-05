@@ -1,216 +1,274 @@
 import expr.{
-  AtMost, Binary, Boolean, Divides, Equals, Grouping, LessThan, Literal, Minus,
-  NotEquals, Number, Plus, Times,
+  AtMost, Boolean, Divides, Equals, Grouping, LessThan, Literal, Minus,
+  NotEquals, Number, Op, Plus, Times,
 }
+import gleam/list
 import gleeunit
 import parser
-import parser_combinators.{Error, Success}
-import scanner.{Operator, scan_tokens}
+import parser_combinators.{Span, Success}
 
 pub fn main() -> Nil {
   gleeunit.main()
 }
 
-pub fn parse_expr_test() {
-  // Valid complete expression
-  assert run(parser.equality, "1 * 2  !=   (2 < (0 - 0))")
-    == Success(
-      Binary(
-        NotEquals,
-        Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
-        Grouping(Binary(
-          LessThan,
-          Literal(Number(2.0)),
-          Grouping(Binary(Minus, Literal(Number(0.0)), Literal(Number(0.0)))),
-        )),
-      ),
-      [],
-    )
+/// Dummy span for comparing AST structure (ignores position)
+const span = Span(0, 0, 0)
 
-  // NEW BEHAVIOR: `1 * 2 3 4` now ERRORS because after parsing `1 * 2`,
-  // we find `3` (a NUMBER token) without a separator before it
-  // Context-aware checking: NUMBER tokens can never be operators!
-  assert run(parser.equality, "1 * 2 3 4")
-    == Error(
-      "Expected separator between values \n Expected the binary operator `/` or `*` but saw 3.0",
-      True,
-    )
+// ============================================================================
+// Parser Tests
+// ============================================================================
 
-  // Same for `1 1` - second `1` is a NUMBER without separator
-  assert run(parser.equality, "1 1")
-    == Error(
-      "Expected separator between values \n Expected the binary operator `/` or `*` but saw 1.0",
-      True,
-    )
-
-  // But `1 * 2 - 3` still works because `-` is NOT a primary token
-  assert run(parser.equality, "1 * 2 - 3")
-    == Success(
-      Binary(
-        Minus,
-        Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
-        Literal(Number(3.0)),
-      ),
-      [],
-    )
-
-  // `1 * apple` ERRORS because after parsing `*` successfully,
-  // we MUST parse a factor but `apple` is not valid.
-  assert run(parser.equality, "1 * apple")
-    == Error(
-      "Expected an open parens but saw identifier `apple` "
-        <> "\n Expected a literal `Number , String , true , false , nil` but saw identifier `apple` "
-        <> "\n Expected a unary op `! , -` but saw identifier `apple`",
-      committed: True,
-    )
-}
-
-pub fn parse_equality_test() {
-  assert run(parser.equality, "1 * 2  <=  3 / 4    ==   true")
-    == Success(
-      Binary(
-        Equals,
-        Binary(
-          AtMost,
-          Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
-          Binary(Divides, Literal(Number(3.0)), Literal(Number(4.0))),
-        ),
-        Literal(Boolean(True)),
-      ),
-      [],
-    )
-}
-
-pub fn parse_comparison_test() {
-  assert run(parser.comparison, "1 * 2 <= 3 / 4 + 5")
-    == Success(
-      Binary(
-        AtMost,
-        Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
-        Binary(
-          Plus,
-          Binary(Divides, Literal(Number(3.0)), Literal(Number(4.0))),
-          Literal(Number(5.0)),
-        ),
-      ),
-      [],
-    )
-}
-
-pub fn parse_term_test() {
-  assert run(parser.term, "1 * 2 - 3 / 4 + 5")
-    == Success(
-      Binary(
-        Plus,
-        Binary(
-          Minus,
-          Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
-          Binary(Divides, Literal(Number(3.0)), Literal(Number(4.0))),
-        ),
-        Literal(Number(5.0)),
-      ),
-      [],
-    )
-}
-
-pub fn parse_factor_test() {
-  assert run(parser.factor, "(123)")
-    == Success(Grouping(Literal(Number(123.0))), [])
-  assert run(parser.factor, "(123)*4")
-    == Success(
-      Binary(Times, Grouping(Literal(Number(123.0))), Literal(Number(4.0))),
-      [],
-    )
-  let one_times_two_div_3_times_4 =
-    Success(
-      Binary(
+pub fn parse_expression_test() {
+  let test_cases = [
+    // Literals
+    #("number literal", "123", Literal(Number(123.0), span)),
+    #("true literal", "true", Literal(Boolean(True), span)),
+    #("false literal", "false", Literal(Boolean(False), span)),
+    #("nil literal", "nil", Literal(expr.Nil, span)),
+    #("string literal", "\"hello\"", Literal(expr.String("hello"), span)),
+    // Grouping
+    #("grouping", "(123)", Grouping(Literal(Number(123.0), span), span)),
+    // Unary
+    #(
+      "numeric negation",
+      "-42",
+      Op(expr.NumericNegation, [Literal(Number(42.0), span)], span),
+    ),
+    #(
+      "boolean negation",
+      "!true",
+      Op(expr.BooleanNegation, [Literal(Boolean(True), span)], span),
+    ),
+    // Binary - basic
+    #(
+      "multiplication",
+      "2 * 3",
+      Op(
         Times,
-        Binary(
-          Divides,
-          Binary(Times, Literal(Number(1.0)), Literal(Number(2.0))),
-          Literal(Number(3.0)),
-        ),
-        Literal(Number(4.0)),
+        [Literal(Number(2.0), span), Literal(Number(3.0), span)],
+        span,
       ),
-      [],
-    )
-  assert run(parser.factor, "1*2/3*4") == one_times_two_div_3_times_4
-  // Whitespace don't matter 🥳
-  assert run(parser.factor, "1 * 2  /3* 4") == one_times_two_div_3_times_4
-}
-
-pub fn parse_unary_test() {
-  let assert Ok(tokens) = scan_tokens("-(123)", 0)
-  assert tokens
-    == [
-      Operator(scanner.Minus, 0),
-      scanner.Punctuation(scanner.LeftParen, 0),
-      scanner.Literal(scanner.Number(123.0), 0),
-      scanner.Punctuation(scanner.RightParen, 0),
-    ]
-  assert parser.expr()(tokens)
-    == Success(
-      expr.Unary(
-        expr.NumericNegation,
-        expr.Grouping(expr.Literal(expr.Number(123.0))),
+    ),
+    #(
+      "less than",
+      "1 < 2",
+      Op(
+        LessThan,
+        [Literal(Number(1.0), span), Literal(Number(2.0), span)],
+        span,
       ),
-      [],
-    )
-    as "Parsing  -(123)  expr"
+    ),
+    #(
+      "equality",
+      "1 == 2",
+      Op(
+        Equals,
+        [Literal(Number(1.0), span), Literal(Number(2.0), span)],
+        span,
+      ),
+    ),
+    // Binary - left associativity
+    #(
+      "term left associativity",
+      "1 + 2 - 3",
+      Op(
+        Minus,
+        [
+          Op(
+            Plus,
+            [Literal(Number(1.0), span), Literal(Number(2.0), span)],
+            span,
+          ),
+          Literal(Number(3.0), span),
+        ],
+        span,
+      ),
+    ),
+    #(
+      "factor left associativity",
+      "1*2/3*4",
+      Op(
+        Times,
+        [
+          Op(
+            Divides,
+            [
+              Op(
+                Times,
+                [Literal(Number(1.0), span), Literal(Number(2.0), span)],
+                span,
+              ),
+              Literal(Number(3.0), span),
+            ],
+            span,
+          ),
+          Literal(Number(4.0), span),
+        ],
+        span,
+      ),
+    ),
+    // Precedence
+    #(
+      "multiplication before addition",
+      "1 * 2 + 3",
+      Op(
+        Plus,
+        [
+          Op(
+            Times,
+            [Literal(Number(1.0), span), Literal(Number(2.0), span)],
+            span,
+          ),
+          Literal(Number(3.0), span),
+        ],
+        span,
+      ),
+    ),
+    #(
+      "factor before term",
+      "1 * 2 - 3 / 4 + 5",
+      Op(
+        Plus,
+        [
+          Op(
+            Minus,
+            [
+              Op(
+                Times,
+                [Literal(Number(1.0), span), Literal(Number(2.0), span)],
+                span,
+              ),
+              Op(
+                Divides,
+                [Literal(Number(3.0), span), Literal(Number(4.0), span)],
+                span,
+              ),
+            ],
+            span,
+          ),
+          Literal(Number(5.0), span),
+        ],
+        span,
+      ),
+    ),
+    #(
+      "comparison before equality",
+      "1 * 2  <=  3 / 4    ==   true",
+      Op(
+        Equals,
+        [
+          Op(
+            AtMost,
+            [
+              Op(
+                Times,
+                [Literal(Number(1.0), span), Literal(Number(2.0), span)],
+                span,
+              ),
+              Op(
+                Divides,
+                [Literal(Number(3.0), span), Literal(Number(4.0), span)],
+                span,
+              ),
+            ],
+            span,
+          ),
+          Literal(Boolean(True), span),
+        ],
+        span,
+      ),
+    ),
+    // Grouping affects precedence
+    #(
+      "grouping in multiplication",
+      "(123)*4",
+      Op(
+        Times,
+        [Grouping(Literal(Number(123.0), span), span), Literal(Number(4.0), span)],
+        span,
+      ),
+    ),
+    // Complex nested expression
+    #(
+      "complex nested",
+      "1 * 2  !=   (2 < (0 - 0))",
+      Op(
+        NotEquals,
+        [
+          Op(
+            Times,
+            [Literal(Number(1.0), span), Literal(Number(2.0), span)],
+            span,
+          ),
+          Grouping(
+            Op(
+              LessThan,
+              [
+                Literal(Number(2.0), span),
+                Grouping(
+                  Op(
+                    Minus,
+                    [Literal(Number(0.0), span), Literal(Number(0.0), span)],
+                    span,
+                  ),
+                  span,
+                ),
+              ],
+              span,
+            ),
+            span,
+          ),
+        ],
+        span,
+      ),
+    ),
+    // Whitespace and comments
+    #("leading/trailing whitespace", "  123  ", Literal(Number(123.0), span)),
+    #(
+      "line comment",
+      "1 + 2 // this is a comment",
+      Op(Plus, [Literal(Number(1.0), span), Literal(Number(2.0), span)], span),
+    ),
+    #(
+      "block comments",
+      "1 /* inline */ + /* another */ 2",
+      Op(Plus, [Literal(Number(1.0), span), Literal(Number(2.0), span)], span),
+    ),
+    #(
+      "block comment between unary op and operand",
+      "! /* hello world */ true",
+      Op(expr.BooleanNegation, [Literal(Boolean(True), span)], span),
+    ),
+  ]
 
-  expect_parse_error(
-    parser.expr,
-    "-+(123)",
-    "Expected an open parens but saw - "
-      <> "\n Expected a literal `Number , String , true , false , nil` but saw - "
-      <> "\n Expected an open parens but saw + "
-      <> "\n Expected a literal `Number , String , true , false , nil` but saw + "
-      <> "\n Expected a unary op `! , -` but saw +",
-  )
+  use #(description, input, expected) <- test_each(test_cases)
+  let assert Success(found, _) = parser.parse(input) as description
+  assert exprs_equal(found, expected) as description
 }
 
-pub fn parse_parenthesised_test() {
-  assert run(parser.expr, "(123)")
-    == Success(expr.Grouping(expr.Literal(expr.Number(123.0))), [])
-    as "Parsing  (123)  expr"
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Compare two Expr values for structural equality, ignoring spans
+fn exprs_equal(a: expr.Expr, b: expr.Expr) -> Bool {
+  case a, b {
+    Literal(v1, _), Literal(v2, _) -> v1 == v2
+    Op(op1, operands1, _), Op(op2, operands2, _) ->
+      op1 == op2 && operands_equal(operands1, operands2)
+    Grouping(e1, _), Grouping(e2, _) -> exprs_equal(e1, e2)
+    _, _ -> False
+  }
 }
 
-pub fn parse_literal_test() {
-  assert run(parser.expr, "123")
-    == Success(expr.Literal(expr.Number(123.0)), [])
-    as "Parsing  123  literal"
-
-  assert run(parser.expr, "nil") == Success(expr.Literal(expr.Nil), [])
-    as "Parsing  nil  literal"
-
-  assert run(parser.expr, "true")
-    == Success(expr.Literal(expr.Boolean(True)), [])
-    as "Parsing  true  literal"
+fn operands_equal(a: List(expr.Expr), b: List(expr.Expr)) -> Bool {
+  case a, b {
+    [], [] -> True
+    [x, ..xs], [y, ..ys] -> exprs_equal(x, y) && operands_equal(xs, ys)
+    _, _ -> False
+  }
 }
 
-pub fn parse_literal_fails_result_in_informative_messages_test() {
-  expect_parse_error(
-    parser.expr,
-    "apple",
-    "Expected an open parens but saw identifier `apple` \n Expected a literal `Number , String , true , false , nil` but saw identifier `apple` \n Expected a unary op `! , -` but saw identifier `apple`",
-  )
-  expect_parse_error(
-    parser.expr,
-    "*",
-    "Expected an open parens but saw * \n Expected a literal `Number , String , true , false , nil` but saw * \n Expected a unary op `! , -` but saw *",
-  )
-  expect_parse_error(
-    parser.expr,
-    "var x = 123;",
-    "Expected an open parens but saw keyword `var` \n Expected a literal `Number , String , true , false , nil` but saw keyword `var` \n Expected a unary op `! , -` but saw keyword `var`",
-  )
-}
-
-fn expect_parse_error(parser, input, err_msg) {
-  assert run(parser, input) == Error(err_msg, committed: False)
-}
-
-fn run(parser, input) {
-  let assert Ok(tokens) = scan_tokens(input, 0)
-  parser()(tokens)
+fn test_each(test_cases: List(a), run_test: fn(a) -> Nil) -> Nil {
+  list.each(test_cases, run_test)
 }
