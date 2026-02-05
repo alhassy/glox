@@ -1,13 +1,13 @@
 // Tests for error reporting - both parse-time and runtime errors
 
+import error_formatter
 import evaluator
+import expr_parser as parser
 import gleam/int
 import gleam/list
 import gleam/string
 import gleeunit
-import parser
 import parser_combinators.{Error as ParseError, Success}
-import error_formatter
 import type_error.{RuntimeError}
 
 pub fn main() -> Nil {
@@ -15,7 +15,7 @@ pub fn main() -> Nil {
 }
 
 // ============================================================================
-// Parser Errors
+// Expr Parser Errors
 // ============================================================================
 
 pub fn parser_error_formatted_test() {
@@ -181,7 +181,7 @@ pub fn parser_error_formatted_test() {
 }
 
 // ============================================================================
-// Runtime Errors
+// Expr Evaluation Runtime Errors
 // ============================================================================
 
 pub fn runtime_error_message_test() {

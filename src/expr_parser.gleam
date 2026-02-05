@@ -5,7 +5,7 @@ import expr.{
 }
 import gleam/list
 import gleam/string
-import parser_combinators as parse
+import parser_combinators.{type Parser} as parse
 
 /// A Gleam parser for the following grammar.
 /// ```
@@ -32,13 +32,15 @@ import parser_combinators as parse
 pub fn parse(source: String) -> parse.ParseResult(Expr) {
   source
   |> parse.input_from_string
-  |> {
-    use _ <- parse.get(skip_ws())
-    use expr <- parse.get(expression())
-    use _ <- parse.get(skip_ws())
-    use _ <- parse.get(parse.eof())
-    parse.return(expr)
-  }
+  |> parser()
+}
+
+pub fn parser() -> Parser(Expr) {
+  use _ <- parse.get(skip_ws())
+  use expr <- parse.get(expression())
+  use _ <- parse.get(skip_ws())
+  use _ <- parse.get(parse.eof())
+  parse.return(expr)
 }
 
 // ----------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import evaluator
 import expr.{Boolean, Number, String}
 import gleam/list
 import gleeunit
-import parser
+import expr_parser as parser
 import parser_combinators.{Success}
 
 pub fn main() -> Nil {

@@ -4,7 +4,7 @@ import expr.{
 }
 import gleam/list
 import gleeunit
-import parser
+import expr_parser as parser
 import parser_combinators.{Span, Success}
 
 pub fn main() -> Nil {
