@@ -46,7 +46,7 @@ pub fn parser() -> Parser(Expr) {
 // Whitespace handling
 // ----------------------------------------------------------------------------
 
-fn skip_ws() -> parse.Parser(Nil) {
+pub fn skip_ws() -> parse.Parser(Nil) {
   parse.whitespace()
   |> parse.or(parse.line_comment("//"))
   |> parse.or(parse.text_delimited("/*", "*/"))
