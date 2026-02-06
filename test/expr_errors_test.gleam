@@ -57,24 +57,6 @@ pub fn parser_error_formatted_test() {
        |     Expected expression after '('",
     ),
     #(
-      "unknown identifier after operator",
-      "1 + apple",
-      "┌─ Syntax error at line 1, columns 5-9
-       |
-     1 | 1 + apple
-       |     ^^^^^
-       |     Unknown identifier `apple`. Variables are not supported yet - only numbers, strings, true, false, and nil",
-    ),
-    #(
-      "unknown identifier before operator",
-      "apple - 1",
-      "┌─ Syntax error at line 1, columns 1-5
-       |
-     1 | apple - 1
-       | ^^^^^
-       |     Unknown identifier `apple`. Variables are not supported yet - only numbers, strings, true, false, and nil",
-    ),
-    #(
       "missing operator between values",
       "1 2",
       "┌─ Syntax error at line 1, column 3
@@ -82,15 +64,6 @@ pub fn parser_error_formatted_test() {
      1 | 1 2
        |   ^
        |     Expected one of `*`, `/` before `2`",
-    ),
-    #(
-      "unknown identifier standalone",
-      "apple",
-      "┌─ Syntax error at line 1, columns 1-5
-       |
-     1 | apple
-       | ^^^^^
-       |     Unknown identifier `apple`. Variables are not supported yet - only numbers, strings, true, false, and nil",
     ),
     #(
       "unexpected character at column 5",

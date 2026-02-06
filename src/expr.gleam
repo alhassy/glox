@@ -14,8 +14,8 @@ import parser_combinators.{type Span}
 /// operator       → "==" | "!=" | "<" | "<=" | ">" | ">="
 ///                | "+"  | "-"  | "*" | "/" ;
 /// ```
-
 pub type Expr {
+  Variable(name: String, span: Span)
   Literal(value: Literal, span: Span)
   Op(op: Operator, operands: List(Expr), span: Span)
   Grouping(expr: Expr, span: Span)

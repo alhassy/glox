@@ -1,7 +1,7 @@
 // Tests for error reporting - both parse-time and runtime errors
 
 import error_formatter
-import expr.{Divides, Literal, Number, Op, String, Times}
+import expr.{Divides, Literal, Number, Op, Plus, String, Times, Variable}
 import gleam/int
 import gleam/list
 import gleam/option.{Some}
@@ -89,11 +89,20 @@ pub fn program_parser_success_test() {
       ]),
     ),
     #(
-      "global variable declaration then print call",
-      "var name = \"James!\"; print 12; ",
+      "global variable declaration then print call involving string catenation",
+      "var name = \"James!\"; print \"Hello \" + name; ",
       Program([
         VarDecl("name", Some(Literal(String("James!"), Span(1, 12, 8)))),
-        Statement(Print(Literal(Number(12.0), Span(1, 28, 2)))),
+        Statement(
+          Print(Op(
+            Plus,
+            [
+              Literal(String("Hello "), Span(1, 28, 8)),
+              Variable("name", Span(1, 39, 4)),
+            ],
+            Span(1, 28, 15),
+          )),
+        ),
       ]),
     ),
   ]

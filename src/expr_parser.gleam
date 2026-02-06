@@ -1,7 +1,7 @@
 import expr.{
   type Expr, type Operator, AtLeast, AtMost, Boolean, BooleanNegation, Divides,
   Equals, GreaterThan, Grouping, LessThan, Literal, Minus, Nil as LitNil,
-  NotEquals, Number, NumericNegation, Op, Plus, String, Times,
+  NotEquals, Number, NumericNegation, Op, Plus, String, Times, Variable,
 }
 import gleam/list
 import gleam/string
@@ -178,25 +178,19 @@ fn literal() {
   parse.ordered_choice([
     parse.number() |> parse.map(Number),
     parse.string_literal() |> parse.map(String),
-    keyword_literal(),
   ])
   |> parse.map_with_span(fn(s, span) { Literal(s, span) })
+  |> parse.or(keyword_literal())
 }
 
-fn keyword_literal() {
+fn keyword_literal() -> Parser(Expr) {
   parse.identifier()
   |> parse.then_with_span(fn(id, span) {
     case id {
-      "true" -> parse.return(Boolean(True))
-      "false" -> parse.return(Boolean(False))
-      "nil" -> parse.return(LitNil)
-      _ ->
-        parse.abort(
-          "Unknown identifier `"
-          <> id
-          <> "`. Variables are not supported yet - only numbers, strings, true, false, and nil",
-        )
-        |> parse.at(span)
+      "true" -> parse.return(Literal(Boolean(True), span:))
+      "false" -> parse.return(Literal(Boolean(False), span:))
+      "nil" -> parse.return(Literal(LitNil, span:))
+      _ -> parse.return(Variable(name: id, span:))
     }
   })
 }

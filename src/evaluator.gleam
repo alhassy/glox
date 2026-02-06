@@ -2,7 +2,7 @@ import builtin
 import expr.{type Expr, type Literal}
 import gleam/list
 import gleam/result
-import type_error.{type RuntimeError}
+import type_error.{type RuntimeError, RuntimeError}
 
 type Value =
   Literal
@@ -11,6 +11,7 @@ type Value =
 /// will be typed `Expr -> Result(Value, RuntimeError)`
 pub fn eval(e: Expr) -> Result(Value, RuntimeError) {
   case e {
+    expr.Variable(span:, ..) -> RuntimeError(message: "NOPE", span:) |> Error
     expr.Literal(l, _span) -> l |> Ok
     expr.Grouping(inner, _span) -> eval(inner)
     expr.Op(op, operands, _span) -> {

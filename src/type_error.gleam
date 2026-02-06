@@ -80,12 +80,15 @@ fn all_arg_types(b: builtin.BuiltIn) -> List(List(LoxType)) {
 /// Format accepted types for a built-in
 fn arg_types_to_string(b: builtin.BuiltIn) -> String {
   case b.overloads {
-    [sig] -> sig.arg_types |> list.map(lox_type.to_string) |> string.join(" or ")
+    [sig] ->
+      sig.arg_types |> list.map(lox_type.to_string) |> string.join(" or ")
     sigs ->
       sigs
       |> list.map(fn(sig) {
         "("
-        <> { sig.arg_types |> list.map(lox_type.to_string) |> string.join(", ") }
+        <> {
+          sig.arg_types |> list.map(lox_type.to_string) |> string.join(", ")
+        }
         <> ")"
       })
       |> string.join(" or ")
@@ -95,6 +98,7 @@ fn arg_types_to_string(b: builtin.BuiltIn) -> String {
 /// Get the span from an expression
 pub fn get_span(e: Expr) -> Span {
   case e {
+    expr.Variable(_, span) -> span
     expr.Literal(_, span) -> span
     expr.Op(_, _, span) -> span
     expr.Grouping(_, span) -> span
