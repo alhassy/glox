@@ -1,10 +1,10 @@
+import error_formatter
 import evaluator
 import expr.{type Literal, Boolean, Number, String as LoxString}
+import expr_parser as parser
 import gleam/io
 import gleam/string
-import expr_parser as parser
 import parser_combinators.{Error as ParseError, Success}
-import error_formatter
 import type_error.{RuntimeError}
 
 import argv

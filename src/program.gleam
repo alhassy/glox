@@ -1,9 +1,11 @@
 /// A Gleam module to work with the following grammar. 
 /// ```
-/// program        → statement* EOF 
+/// program        → declaration* EOF ;
+/// declaration    → varDecl | statement ;
 /// statement      → exprStmt | printStmt 
 /// exprStmt       → expression ";"
 /// printStmt      → "print" expression ";"
+/// varDecl        → "var" IDENTIFIER ( "=" expression )? ";"
 /// ```
 /// 
 import builtin
@@ -12,16 +14,21 @@ import evaluator
 import expr.{type Expr, type Literal}
 import expr_parser
 import gleam/bool
-import gleam/io
 import gleam/list
+import gleam/option.{type Option, Some}
 import gleam/result
-import parser_combinators.{type Parser, type Span} as parse
+import parser_combinators.{type Parser} as parse
 
 // ## Type ##############################################################################
 
 pub type Program {
-  // Denotes statements `S1; S2; ...; Sn`
-  Program(statements: List(Statement))
+  Program(declarations: List(Declaration))
+}
+
+/// Declarations of methods, classes, and global variables.
+pub type Declaration {
+  VarDecl(name: String, value: Option(Expr))
+  Statement(Statement)
 }
 
 pub type Statement {
@@ -43,22 +50,53 @@ pub fn parse(source: String) -> parse.ParseResult(Program) {
 
 /// A parser for programs
 pub fn program() -> Parser(Program) {
-  use stmts <- get(
-    {
-      use _ <- parse.get(expr_parser.skip_ws())
-      use s <- get(statement())
-      use _ <- parse.get(expr_parser.skip_ws())
-      parse.return(s)
-    }
+  use decls <- get(
+    declaration()
+    |> as_lexeme
     |> parse.star(),
   )
   use _ <- get(parse.eof())
-  parse.return(Program(stmts))
+  parse.return(Program(decls))
 }
 
-//  
-//  use expr <- parse.get(expression())
-//  use _ <- parse.get(skip_ws())
+/// Executes the given parser and ignores whitespace before and after it.
+fn as_lexeme(parser: parse.Parser(a)) -> parse.Parser(a) {
+  use _ <- parse.get(expr_parser.skip_ws())
+  use result <- parse.get(parser)
+  use _ <- parse.get(expr_parser.skip_ws())
+  parse.return(result)
+}
+
+// A parser for declarations
+pub fn declaration() -> Parser(Declaration) {
+  variable() |> parse.or(statement() |> parse.map(Statement))
+}
+
+// A parser for statements
+pub fn variable() -> Parser(Declaration) {
+  use _ <- get(parse.string("var"))
+  use name <- get(parse.identifier() |> as_lexeme)
+  use value <- get(
+    {
+      // If user places anything after `var <name>`, then it better be `=`! 😁
+      use _ <- parse.require(
+        parse.string("="),
+        "Expected to see an `=` for variable assignment",
+      )
+      use expr <- parse.require(
+        expr_parser.parser(),
+        "I expected to see an expression here 😖",
+      )
+      parse.return(expr)
+    }
+    |> parse.maybe,
+  )
+  use _ <- parse.require(
+    parse.string(";"),
+    "I expected to see a semicolon here 🤔",
+  )
+  parse.return(VarDecl(name:, value:))
+}
 
 // A parser for statements
 pub fn statement() -> Parser(Statement) {
@@ -118,16 +156,17 @@ pub fn eval(
   source,
   program,
 ) -> List(side_effect_type) {
-  let Program(statements:) = program
-  use stmt <- list.map(statements)
-  case stmt {
-    Print(expr:) ->
+  let Program(declarations:) = program
+  use decl <- list.map(declarations)
+  case decl {
+    VarDecl(name:, value:) -> todo
+    Statement(Print(expr:)) ->
       case eval_expr_as_string(source, expr) {
         Error(string) | Ok(string) -> string |> my_io.print
       }
     // Expression statements have no side-effects, yet!
     // However, we should still evaluate them in-case they have errors.
-    ExprStatement(expr:) ->
+    Statement(ExprStatement(expr:)) ->
       case eval_expr_as_string(source, expr) {
         Error(whoops) -> whoops |> my_io.print
         Ok(_) -> my_io.do_nothing()

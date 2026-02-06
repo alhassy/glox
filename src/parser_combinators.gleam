@@ -410,6 +410,12 @@ fn filter(
 ///
 /// Always succeeds — either with the parsed value wrapped in `Some`, or with `None`.
 ///
+/// Example uses
+/// + Trailing tokens like commas or newlines
+/// + Optional parts of a grammar, eg variable assignments with optional initializer: `var <identifier> (= <expr>)?`.
+/// 
+/// This combinator corresponds to the `?` regex modifier.
+/// 
 /// ## Example
 ///
 /// Optionally consume a trailing newline:

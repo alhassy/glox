@@ -4,10 +4,11 @@ import error_formatter
 import expr.{Divides, Literal, Number, Op, String, Times}
 import gleam/int
 import gleam/list
+import gleam/option.{Some}
 import gleam/string
 import gleeunit
 import parser_combinators.{Error as ParseError, Span, Success}
-import program.{IO, Print, Program}
+import program.{IO, Print, Program, Statement, VarDecl}
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -58,29 +59,41 @@ pub fn program_parser_success_test() {
     #(
       "one print statement",
       "print 1;",
-      Program([Print(Literal(Number(1.0), Span(1, 7, 1)))]),
+      Program([Statement(Print(Literal(Number(1.0), Span(1, 7, 1))))]),
     ),
     #(
       "two prints and a no-op, and test spacing",
       "print 38 / 2;  print 44 * 4;    print \"bye\"  ;",
       Program([
-        Print(Op(
-          Divides,
-          [
-            Literal(Number(38.0), Span(1, 7, 2)),
-            Literal(Number(2.0), Span(1, 12, 1)),
-          ],
-          Span(1, 7, 6),
-        )),
-        Print(Op(
-          Times,
-          [
-            Literal(Number(44.0), Span(1, 22, 2)),
-            Literal(Number(4.0), Span(1, 27, 1)),
-          ],
-          Span(1, 22, 6),
-        )),
-        Print(Literal(String("bye"), Span(1, 39, 5))),
+        Statement(
+          Print(Op(
+            Divides,
+            [
+              Literal(Number(38.0), Span(1, 7, 2)),
+              Literal(Number(2.0), Span(1, 12, 1)),
+            ],
+            Span(1, 7, 6),
+          )),
+        ),
+        Statement(
+          Print(Op(
+            Times,
+            [
+              Literal(Number(44.0), Span(1, 22, 2)),
+              Literal(Number(4.0), Span(1, 27, 1)),
+            ],
+            Span(1, 22, 6),
+          )),
+        ),
+        Statement(Print(Literal(String("bye"), Span(1, 39, 5)))),
+      ]),
+    ),
+    #(
+      "global variable declaration then print call",
+      "var name = \"James!\"; print 12; ",
+      Program([
+        VarDecl("name", Some(Literal(String("James!"), Span(1, 12, 8)))),
+        Statement(Print(Literal(Number(12.0), Span(1, 28, 2)))),
       ]),
     ),
   ]
@@ -119,6 +132,33 @@ pub fn program_parser_error_test() {
      1 | true & then some extra input;
        |      ^
        |     I expected to see a semicolon here 🤔",
+    ),
+    #(
+      "var decl without termining semi",
+      "var name = 123",
+      "┌─ Syntax error at line 1, column 15
+       |
+     1 | var name = 123
+       |               ^
+       |     I expected to see a semicolon here 🤔",
+    ),
+    #(
+      "trailing `=` in var decl without initalizer",
+      "var name =",
+      "┌─ Syntax error at line 1, column 11
+       |
+     1 | var name =
+       |           ^
+       |     I expected to see an expression here 😖",
+    ),
+    #(
+      "variable decl but missing `=` between name and value",
+      "var name 123",
+      "┌─ Syntax error at line 1, column 10
+        |
+      1 | var name 123
+        |          ^
+        |     Expected to see an `=` for variable assignment",
     ),
   ]
 
