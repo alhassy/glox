@@ -7,8 +7,8 @@ import gleam/list
 import gleam/option.{Some}
 import gleam/string
 import gleeunit
-import parser_combinators.{Error as ParseError, Span, Success}
-import program.{IO, Print, Program, Statement, VarDecl}
+import parser_combinators.{Span, Success, SyntaxError}
+import program.{ExprStatement, IO, Print, Program, Statement, VarDecl}
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -59,49 +59,95 @@ pub fn program_parser_success_test() {
     #(
       "one print statement",
       "print 1;",
-      Program([Statement(Print(Literal(Number(1.0), Span(1, 7, 1))))]),
+      Program([Statement(Print(Literal(Number(1.0), Span(1, 7, 1))))], []),
     ),
     #(
       "two prints and a no-op, and test spacing",
       "print 38 / 2;  print 44 * 4;    print \"bye\"  ;",
-      Program([
-        Statement(
-          Print(Op(
-            Divides,
-            [
-              Literal(Number(38.0), Span(1, 7, 2)),
-              Literal(Number(2.0), Span(1, 12, 1)),
-            ],
-            Span(1, 7, 6),
-          )),
-        ),
-        Statement(
-          Print(Op(
-            Times,
-            [
-              Literal(Number(44.0), Span(1, 22, 2)),
-              Literal(Number(4.0), Span(1, 27, 1)),
-            ],
-            Span(1, 22, 6),
-          )),
-        ),
-        Statement(Print(Literal(String("bye"), Span(1, 39, 5)))),
-      ]),
+      Program(
+        [
+          Statement(
+            Print(Op(
+              Divides,
+              [
+                Literal(Number(38.0), Span(1, 7, 2)),
+                Literal(Number(2.0), Span(1, 12, 1)),
+              ],
+              Span(1, 7, 6),
+            )),
+          ),
+          Statement(
+            Print(Op(
+              Times,
+              [
+                Literal(Number(44.0), Span(1, 22, 2)),
+                Literal(Number(4.0), Span(1, 27, 1)),
+              ],
+              Span(1, 22, 6),
+            )),
+          ),
+          Statement(Print(Literal(String("bye"), Span(1, 39, 5)))),
+        ],
+        [],
+      ),
     ),
     #(
       "global variable declaration then print call involving string catenation",
       "var name = \"James!\"; print \"Hello \" + name; ",
-      Program([
-        VarDecl("name", Some(Literal(String("James!"), Span(1, 12, 8)))),
-        Statement(
-          Print(Op(
-            Plus,
-            [
-              Literal(String("Hello "), Span(1, 28, 8)),
-              Variable("name", Span(1, 39, 4)),
-            ],
-            Span(1, 28, 15),
-          )),
+      Program(
+        [
+          VarDecl("name", Some(Literal(String("James!"), Span(1, 12, 8)))),
+          Statement(
+            Print(Op(
+              Plus,
+              [
+                Literal(String("Hello "), Span(1, 28, 8)),
+                Variable("name", Span(1, 39, 4)),
+              ],
+              Span(1, 28, 15),
+            )),
+          ),
+        ],
+        [],
+      ),
+    ),
+    #(
+      "a malformed variable declaration doesn't prevent parsing subsequent valid statements",
+      "var name \"James!\" /* whoops, forgot the =!*/ print \"Bye\"; ",
+      // The malformed var decl causes errors but we recover and parse the print statement
+      Program([Statement(Print(Literal(String("Bye"), Span(1, 52, 5))))], [
+        SyntaxError(
+          "Expected to see an `=` for variable assignment",
+          Span(1, 10, 1),
+        ),
+      ]),
+    ),
+    #(
+      "`variable` is a valid identifier and not the start of a `var` declaration!",
+      "print; variable;",
+      // The malformed var decl causes errors but we recover and parse the print statement
+      Program([Statement(ExprStatement(Variable("variable", Span(1, 8, 8))))], [
+        SyntaxError(
+          "A print clause is of the form ` print <expr>; `, you're missing the expr!",
+          Span(1, 6, 1),
+        ),
+      ]),
+    ),
+    #(
+      "three different kinds of errors",
+      "var name /* missing semicolon*/ print /* missing expr*/; 1 - /* missing right operand! */;",
+      Program([], [
+        SyntaxError(
+          "Expected to see an `=` for variable assignment",
+          Span(1, 33, 1),
+        ),
+        SyntaxError(
+          "A print clause is of the form ` print <expr>; `, you're missing the expr!",
+          Span(1, 38, 1),
+        ),
+        SyntaxError(
+          "Expected a number, string, or expression after operator",
+          Span(1, 90, 1),
         ),
       ]),
     ),
@@ -114,6 +160,8 @@ pub fn program_parser_success_test() {
 }
 
 pub fn program_parser_error_test() {
+  // These test cases have syntax errors that result in error recovery.
+  // The parser returns Success with collected errors instead of ParseError.
   let test_cases = [
     #(
       "unterminated print statement",
@@ -164,25 +212,27 @@ pub fn program_parser_error_test() {
       "variable decl but missing `=` between name and value",
       "var name 123",
       "┌─ Syntax error at line 1, column 10
-        |
-      1 | var name 123
-        |          ^
-        |     Expected to see an `=` for variable assignment",
+       |
+     1 | var name 123
+       |          ^
+       |     Expected to see an `=` for variable assignment",
     ),
   ]
 
   use #(description, input, expected_formatted) <- list.each(test_cases)
-  let assert ParseError(message, span, committed) = program.parse(input)
+  let assert Success(
+    found: Program(declarations: [], errors: [first_error, ..]),
+    ..,
+  ) = program.parse(input)
     as description
   let formatted =
     error_formatter.format_error(
       kind: "Syntax error",
-      message:,
+      message: first_error.message,
       source: input,
-      at: span,
+      at: first_error.at,
     )
   assert formatted == dedent(expected_formatted) as description
-  assert committed == True as description
 }
 
 // ============================================================================

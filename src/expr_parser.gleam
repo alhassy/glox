@@ -46,11 +46,21 @@ pub fn parser() -> Parser(Expr) {
 // Whitespace handling
 // ----------------------------------------------------------------------------
 
+// Discard all whitespace, if there is any at all.
 pub fn skip_ws() -> parse.Parser(Nil) {
   parse.whitespace()
   |> parse.or(parse.line_comment("//"))
   |> parse.or(parse.text_delimited("/*", "*/"))
   |> parse.star
+  |> parse.map(fn(_) { Nil })
+}
+
+/// Recognize at least one piece of whitespace
+pub fn some_ws() -> parse.Parser(Nil) {
+  parse.whitespace()
+  |> parse.or(parse.line_comment("//"))
+  |> parse.or(parse.text_delimited("/*", "*/"))
+  |> parse.plus
   |> parse.map(fn(_) { Nil })
 }
 

@@ -151,6 +151,20 @@ pub fn negative_lookahead(parser: Parser(a)) -> Parser(Nil) {
   }
 }
 
+/// Peek at whether `parser` succeeded or not, without consuming any input!
+pub fn peeking(parser: Parser(a)) -> Parser(Bool) {
+  parser
+  // If parser succeeds...
+  |> negative_lookahead
+  // then negative_lookahead fails (and no input is consumed!)...
+  |> maybe
+  // but on failure, the `maybe` combinator emits `None`...
+  |> map(option.is_none)
+  // and `None` is `is_none`, which is true 😁
+
+  // Thus, if parser succeeds we return True, but no input is consumed!
+}
+
 /// Parser that always succeeds with the given value.
 pub fn return(value: a) -> Parser(a) {
   fn(input) { Success(value, input) }
@@ -389,7 +403,7 @@ pub fn map(parser: Parser(a), mapper: fn(a) -> b) -> Parser(b) {
 }
 
 /// Filter parser results, failing if predicate returns False.
-fn filter(
+pub fn filter(
   parser: Parser(a),
   predicate: fn(a) -> Bool,
   message: String,
@@ -446,7 +460,7 @@ pub fn star(parser: Parser(a)) -> Parser(List(a)) {
 }
 
 /// Parse one or more occurrences.
-fn plus(parser: Parser(a)) -> Parser(List(a)) {
+pub fn plus(parser: Parser(a)) -> Parser(List(a)) {
   use first <- get(parser)
   use rest <- get(parser |> star)
   return([first, ..rest])
@@ -740,12 +754,17 @@ pub fn word() -> Parser(String) {
   identifier() |> or(pop())
 }
 
-/// Parse an identifier (alphanumeric string, at least one char).
+/// Parse an identifier (longest possible alphanumeric string, at least one char).
 pub fn identifier() -> Parser(String) {
   pop()
   |> filter(is_alphanumeric, "Expected alphanumeric")
   |> plus
   |> map(string.concat)
+}
+
+/// Parse longest possible alpanumeric string that is identical to the given `id`.
+pub fn the_identifier(id) -> Parser(String) {
+  identifier() |> filter(fn(it) { id == it }, "Expected to parse " <> id)
 }
 
 pub fn is_alphanumeric(c: String) -> Bool {
@@ -900,4 +919,117 @@ pub fn line_comment(prefix: String) -> Parser(String) {
   // A line comment at the end of a file is not terminated by a newline
   use _ <- get(maybe(string("\n")))
   return(string.concat(text))
+}
+
+// ============================================================================
+// Syncronization
+// ============================================================================
+
+/// 
+///  A parser really has two jobs:
+/// 
+///   1. Given a valid sequence of tokens, produce a corresponding syntax tree.
+///   2. Given an invalid sequence of tokens, detect any errors and tell the user about their mistakes.
+/// 
+/// A decent parser should:
+/// 
+///   1. Report as many distinct errors as there are. 
+///      Aborting after the first error is easy to implement, but it’s annoying for users if every time
+///      they fix what they think is the one error in a file, a new one appears. 
+///      They want to see them all.
+/// 
+///   2. Minimize cascaded errors. 
+///      Once a single error is found, the parser no longer really knows what’s going on. 
+///      It tries to get itself back on track and keep going, but if it gets confused, 
+///      it may report a slew of ghost errors that don’t indicate other real problems in the code.
+///      When the first error is fixed, those phantoms disappear, because they reflect only the
+///      parser’s own confusion. Cascaded errors are annoying because they can scare the user into
+///      thinking their code is in a worse state than it is.
+/// 
+/// The last two points are in tension. We want to report as many separate errors as we can,
+/// but we don’t want to report ones that are merely side effects of an earlier one.
+/// 
+/// The way a parser responds to an error and keeps going to look for later errors is called **error recovery.**
+/// 1. As soon as the parser detects an error, it enters _panic mode_: It knows at least one token doesn’t make sense 
+///    given its current state in the middle of some stack of grammar productions.
+/// 2. Before it can get back to parsing, it needs to get its state and the sequence of forthcoming tokens aligned
+///    such that the next token does match the rule being parsed. This process is called **synchronization.**
+/// 3. To do that, we select some rule in the grammar that will mark the synchronization point. 
+///    The parser fixes its parsing state by jumping out of any nested productions until it gets back to that rule.
+///    Then it synchronizes the token stream by discarding tokens until it reaches one that can appear at that point in the rule.
+/// 4. Any additional real syntax errors hiding in those discarded tokens aren’t reported, 
+///    but it also means that any mistaken cascaded errors that are side effects of the initial error aren’t
+///    falsely reported either, which is a decent trade-off.
+/// 
+/// The traditional place in the grammar to synchronize is between statements; i.e., at the declaration level.
+/// 
+/// With recursive descent, i.e., monadic parsing combinators, the parser’s state
+/// ---which rules it is in the middle of recognizing--- is not stored explicitly in fields.
+/// Instead, we use Gleam's own call stack to track what the parser is doing.
+/// Each rule in the middle of being parsed is a call frame on the stack. 
+/// In order to reset that state, we need to clear out those call frames.
+/// 
+/// Since parsing combinators are combined with `then`,
+/// the natural way to "reset the state" is to error out
+/// and use the `or` combinator:
+/// Higher up in the method for the grammar rule we are synchronizing to, we’ll continue there.
+/// Since we synchronize on statement boundaries, we’ll use `or` there. 
+/// All that’s left is to synchronize the tokens.
+/// 
+/// We want to discard tokens until we’re right at the beginning of the next statement.
+/// That boundary is pretty easy to spot—it’s one of the main reasons we picked it.
+/// After a semicolon, we’re probably finished with a statement. 
+/// Most statements start with a keyword ---`for, if, return, var`, etc.
+/// When the next token is any of those, we’re probably about to start a statement.
+/// 
+/// { I say “probably” because we could hit a semicolon separating clauses in a `for` loop.
+/// Our synchronization isn’t perfect, but that’s OK. 
+/// We’ve already reported the first error precisely, so everything after that is kind of “best effort”. }
+//
+
+/// A syntax error encountered during parsing, with location info for error reporting.
+pub type SyntaxError {
+  SyntaxError(message: String, at: Span)
+}
+
+/// This is like `star`, we run the given parser as many times as possible, however
+/// if the parser fails, we don't halt: We discard some input until we're in a parserable
+/// state again, then continue parsing. What we discard is determined by `recovery`.
+/// Moreover, we keep track of the errors encountered whenever we fail.
+/// 
+/// NOTE: `recovery` is a Parser(Nil) since this parser only modifies the input stream,
+/// without actually parsing anything meaningful.
+pub fn synchronize(
+  parser: Parser(a),
+  recovery: Parser(Nil),
+) -> Parser(#(List(a), List(SyntaxError))) {
+  sync_one(parser, recovery)
+  |> star()
+  |> map(partition_results)
+}
+
+fn sync_one(
+  parser: Parser(a),
+  recovery: Parser(Nil),
+) -> Parser(Result(a, SyntaxError)) {
+  fn(input) {
+    case parser(input) {
+      Success(found:, ..) as nice -> Success(..nice, found: Ok(found))
+      Error(message:, at:, ..) ->
+        input
+        |> { recovery |> map(fn(_) { gleam.Error(SyntaxError(message, at)) }) }
+    }
+  }
+}
+
+/// Partition a list of Results into successes and failures.
+fn partition_results(results: List(Result(ok, err))) -> #(List(ok), List(err)) {
+  list.fold(results, #([], []), fn(acc, item) {
+    let #(oks, errs) = acc
+    case item {
+      Ok(ok) -> #([ok, ..oks], errs)
+      gleam.Error(err) -> #(oks, [err, ..errs])
+    }
+  })
+  |> fn(pair) { #(list.reverse(pair.0), list.reverse(pair.1)) }
 }
