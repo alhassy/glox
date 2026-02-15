@@ -1,6 +1,6 @@
 import enviornment
-import evaluator
 import expr.{Boolean, Number, String}
+import expr_evaluator
 import expr_parser as parser
 import gleam/list
 import gleeunit
@@ -63,7 +63,7 @@ pub fn evaluate_expression_test() {
 
 fn eval(input) {
   let assert Success(parsed_expr, _) = parser.parse(input)
-  evaluator.eval(parsed_expr, enviornment.new())
+  expr_evaluator.eval(parsed_expr, enviornment.new())
 }
 
 fn test_each(test_cases: List(a), run_test: fn(a) -> Nil) -> Nil {

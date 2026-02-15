@@ -1,7 +1,7 @@
 import enviornment
 import error_formatter
-import evaluator
 import expr.{type Literal, Boolean, Number, String as LoxString}
+import expr_evaluator
 import expr_parser as parser
 import gleam/io
 import gleam/string
@@ -38,7 +38,7 @@ pub fn run_repl_prompt() {
     _ -> {
       case parser.parse(source) {
         Success(parsed_expr, _) ->
-          case evaluator.eval(parsed_expr, enviornment.new()) {
+          case expr_evaluator.eval(parsed_expr, enviornment.new()) {
             Ok(value) -> format_value(value)
             Error(RuntimeError(message, span)) ->
               error_formatter.format_error(
@@ -66,7 +66,7 @@ pub fn run_repl_prompt() {
 fn format_value(value: Literal) -> String {
   case value {
     LoxString(s) -> "\"" <> s <> "\""
-    Number(n) -> evaluator.number_to_string(n)
+    Number(n) -> expr_evaluator.number_to_string(n)
     Boolean(True) -> "true"
     Boolean(False) -> "false"
     expr.Nil -> "nil"

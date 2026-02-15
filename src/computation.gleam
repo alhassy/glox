@@ -1,8 +1,8 @@
 import builtin
 import enviornment.{type Enviornment}
 import error_formatter
-import evaluator
 import expr.{type Expr, type Literal}
+import expr_evaluator
 import gleam/bool
 import gleam/io
 import gleam/list
@@ -94,7 +94,7 @@ pub fn update_scope(name, value) -> EffectfulComputation(io, Literal) {
 
 pub fn eval_expr(expr: Expr) -> EffectfulComputation(io, Literal) {
   fn(source: String, env: Enviornment, _io) {
-    evaluator.eval(expr, env)
+    expr_evaluator.eval(expr, env)
     |> result.map_error(fn(err) {
       error_formatter.format_error(
         kind: "Runtime error",

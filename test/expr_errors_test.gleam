@@ -2,7 +2,7 @@
 
 import enviornment
 import error_formatter
-import evaluator
+import expr_evaluator
 import expr_parser as parser
 import gleam/int
 import gleam/list
@@ -269,7 +269,7 @@ pub fn runtime_error_message_test() {
   use #(description, input, expected_formatted) <- test_each(test_cases)
   let assert Success(parsed_expr, _) = parser.parse(input) as description
   let assert Error(RuntimeError(msg, span)) =
-    evaluator.eval(parsed_expr, enviornment.new())
+    expr_evaluator.eval(parsed_expr, enviornment.new())
     as description
   let formatted =
     error_formatter.format_error(
