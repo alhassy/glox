@@ -8,24 +8,28 @@
 /// varDecl        → "var" IDENTIFIER ( "=" expression )? ";"
 /// ```
 /// 
-import builtin
+import computation.{type EffectfulComputation, type IO}
+import enviornment.{type Enviornment}
 import error_formatter
-import evaluator
-import expr.{type Expr, type Literal}
+import expr.{type Expr, type Literal, Literal, Nil as LNil}
 import expr_parser
 import gleam/bool
 import gleam/list
-import gleam/option.{type Option, None, Some}
-import gleam/result
-import parser_combinators.{
-  type Parser, type Span, type SyntaxError, Error as ParseErr,
-  Success as ParseSuccess,
-} as parse
+import gleam/option.{type Option}
+import parser_combinators.{type Parser, type SyntaxError} as parse
 
 // ## Type ##############################################################################
 
+/// The top level of a program isn’t a sequence of imperative statements. 
+/// Instead, a program is a set of declarations which all come into being simultaneously. 
+/// The implementation declares all of the names before looking at the bodies of any of the functions.
+/// As such, we can support mutually-recursive methods or using function names before they're declared.
 pub type Program {
-  Program(declarations: List(Declaration), errors: List(SyntaxError))
+  Program(
+    declarations: List(Declaration),
+    errors: List(SyntaxError),
+    enviornment: Enviornment,
+  )
 }
 
 /// Declarations of methods, classes, and global variables.
@@ -58,7 +62,7 @@ pub fn program() -> Parser(Program) {
     discard_garbage_chars_until_at_parserable_input(),
   ))
   use _ <- get(parse.eof())
-  parse.return(Program(decls, errors))
+  parse.return(Program(decls, errors, enviornment.new()))
 }
 
 /// Executes the given parser and ignores whitespace before and after it.
@@ -170,16 +174,7 @@ fn discard_garbage_chars_until_at_parserable_input() -> Parser(Nil) {
 
 // ## Evaluator ##############################################################################
 
-/// A type used for the purposes of testing the evaluator; manual dependency injection.
-/// ### Example
-/// ```
-/// let usual_io = IO(io.print, fn() { Nil })
-/// ```
-pub type IO(i, o) {
-  IO(print: fn(i) -> o, do_nothing: fn() -> o)
-}
-
-pub fn parse_and_evaluate(my_io: IO(String, side_effect_type), source: String) {
+pub fn parse_and_evaluate(my_io: IO(io_output), source: String) {
   let parse_result =
     source
     |> parse.input_from_string
@@ -195,12 +190,8 @@ pub fn parse_and_evaluate(my_io: IO(String, side_effect_type), source: String) {
 
 /// Evaluation of a program is the execution of a bunch of statements, which produces side-effects
 /// and returns no value. The IO argument is useful for testing purposes
-pub fn eval(
-  my_io: IO(String, side_effect_type),
-  source,
-  program,
-) -> List(side_effect_type) {
-  let Program(declarations:, errors:) = program
+pub fn eval(my_io: IO(io_output), source, program) -> List(io_output) {
+  let Program(declarations:, errors:, enviornment:) = program
   // First, print any syntax errors that were recovered from
   let syntax_error_outputs =
     list.map(errors, fn(err) {
@@ -213,46 +204,46 @@ pub fn eval(
       |> my_io.print
     })
   // Then evaluate the successfully parsed declarations
-  let eval_outputs =
-    list.map(declarations, fn(decl) {
-      case decl {
-        VarDecl(name: _, value: _) ->
-          todo as "VarDecl evaluation not implemented"
-        Statement(Print(expr:)) ->
-          case eval_expr_as_string(source, expr) {
-            Error(string) | Ok(string) -> string |> my_io.print
-          }
-        // Expression statements have no side-effects, yet!
-        // However, we should still evaluate them in-case they have errors.
-        Statement(ExprStatement(expr:)) ->
-          case eval_expr_as_string(source, expr) {
-            Error(whoops) -> whoops |> my_io.print
-            Ok(_) -> my_io.do_nothing()
-          }
-      }
-    })
-  list.append(syntax_error_outputs, eval_outputs)
+  let #(_env, io_outputs) =
+    eval_declarations(declarations)
+    |> computation.execute(source, enviornment, my_io)
+  // enviornment, my_io, source, 
+  list.append(syntax_error_outputs, io_outputs)
 }
 
-/// @param source Used to point to the precise part of the source-code that caused an expression-related runtime error
-fn eval_expr_as_string(source, expr: Expr) {
-  evaluator.eval(expr)
-  |> result.map(literal_to_string)
-  |> result.map_error(fn(err) {
-    error_formatter.format_error(
-      kind: "Runtime error",
-      message: err.message,
-      source:,
-      at: err.span,
-    )
-  })
+fn eval_declarations(
+  declarations: List(Declaration),
+) -> EffectfulComputation(io, Literal) {
+  case declarations {
+    [] -> computation.return(LNil)
+    [decl, ..more] -> {
+      use _ <- computation.then(eval_declaration(decl))
+      eval_declarations(more)
+    }
+  }
 }
 
-fn literal_to_string(literal: Literal) {
-  case literal {
-    expr.Boolean(value:) -> bool.to_string(value)
-    expr.Nil -> "nil"
-    expr.Number(value:) -> builtin.number_to_string(value)
-    expr.String(value:) -> "\"" <> value <> "\""
+/// 💢 We shouldn't need this!
+/// Instead, we should get the span of a variable declaration 
+/// and attach it to the `name` of the variable
+const dummy_span = parse.Span(0, 0, 0)
+
+fn eval_declaration(
+  declaration: Declaration,
+) -> EffectfulComputation(io, Literal) {
+  case declaration {
+    VarDecl(name:, value: initializer) ->
+      initializer
+      |> option.unwrap(Literal(LNil, dummy_span))
+      |> computation.eval_expr
+      |> computation.then(fn(value) { computation.update_scope(name, value) })
+    Statement(Print(expr:)) ->
+      expr
+      |> computation.eval_expr
+      |> computation.println
+      |> computation.map(fn(_) { LNil })
+    // Expression statements have no side-effects, yet!
+    // However, we should still evaluate them in-case they have errors.
+    Statement(ExprStatement(expr:)) -> expr |> computation.eval_expr
   }
 }

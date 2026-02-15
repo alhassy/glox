@@ -1,5 +1,7 @@
 // Tests for error reporting - both parse-time and runtime errors
 
+import computation.{IO}
+import enviornment
 import error_formatter
 import expr.{Divides, Literal, Number, Op, Plus, String, Times, Variable}
 import gleam/int
@@ -8,7 +10,7 @@ import gleam/option.{Some}
 import gleam/string
 import gleeunit
 import parser_combinators.{Span, Success, SyntaxError}
-import program.{ExprStatement, IO, Print, Program, Statement, VarDecl}
+import program.{ExprStatement, Print, Program, Statement, VarDecl}
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -17,20 +19,18 @@ pub fn main() -> Nil {
 pub fn program_eval_error_test() {
   let test_cases = [
     #("two prints and a no-op", "print 38 / 2; 44 * true; print \"bye\";", [
-      "PRINTED 19",
-      "PRINTED ┌─ Runtime error at line 1, columns 20-23
+      "ERROR ┌─ Runtime error at line 1, columns 20-23
           |
         1 | print 38 / 2; 44 * true; print \"bye\";
           |                    ^^^^
           |     Cannot apply '*' to number and boolean; right operand must be number",
-      "PRINTED \"bye\"",
     ]),
   ]
 
   use #(description, input, expected_side_effects) <- list.each(test_cases)
   let assert Success(found: program, ..) = program.parse(input) as description
   let transparent_io =
-    IO(print: fn(str) { "PRINTED " <> str }, do_nothing: fn() { "skip" })
+    IO(print: fn(str) { "PRINTED " <> str }, error: fn(str) { "ERROR " <> str })
   let actual_side_effects = program.eval(transparent_io, input, program)
   assert actual_side_effects == expected_side_effects |> list.map(dedent)
     as description
@@ -41,17 +41,19 @@ pub fn program_eval_success_test() {
     #("one print statement", "print 2 * 7;", ["PRINTED 14"]),
     #("two prints and a no-op", "print 38 / 2; 44 * 4; print \"bye\";", [
       "PRINTED 19",
-      "skip",
       "PRINTED \"bye\"",
+    ]),
+    #("variable declaration then print statement", "var me = 2 * 7; print me;", [
+      "PRINTED 14",
     ]),
   ]
 
   use #(description, input, expected_side_effects) <- list.each(test_cases)
   let assert Success(found: program, ..) = program.parse(input) as description
   let transparent_io =
-    IO(print: fn(str) { "PRINTED " <> str }, do_nothing: fn() { "skip" })
+    IO(print: fn(str) { "PRINTED " <> str }, error: fn(str) { "ERROR " <> str })
   let actual_side_effects = program.eval(transparent_io, input, program)
-  assert expected_side_effects == actual_side_effects as description
+  assert actual_side_effects == expected_side_effects as description
 }
 
 pub fn program_parser_success_test() {
@@ -59,7 +61,11 @@ pub fn program_parser_success_test() {
     #(
       "one print statement",
       "print 1;",
-      Program([Statement(Print(Literal(Number(1.0), Span(1, 7, 1))))], []),
+      Program(
+        [Statement(Print(Literal(Number(1.0), Span(1, 7, 1))))],
+        [],
+        enviornment.new(),
+      ),
     ),
     #(
       "two prints and a no-op, and test spacing",
@@ -89,6 +95,7 @@ pub fn program_parser_success_test() {
           Statement(Print(Literal(String("bye"), Span(1, 39, 5)))),
         ],
         [],
+        enviornment.new(),
       ),
     ),
     #(
@@ -109,47 +116,60 @@ pub fn program_parser_success_test() {
           ),
         ],
         [],
+        enviornment.new(),
       ),
     ),
     #(
       "a malformed variable declaration doesn't prevent parsing subsequent valid statements",
       "var name \"James!\" /* whoops, forgot the =!*/ print \"Bye\"; ",
       // The malformed var decl causes errors but we recover and parse the print statement
-      Program([Statement(Print(Literal(String("Bye"), Span(1, 52, 5))))], [
-        SyntaxError(
-          "Expected to see an `=` for variable assignment",
-          Span(1, 10, 1),
-        ),
-      ]),
+      Program(
+        [Statement(Print(Literal(String("Bye"), Span(1, 52, 5))))],
+        [
+          SyntaxError(
+            "Expected to see an `=` for variable assignment",
+            Span(1, 10, 1),
+          ),
+        ],
+        enviornment.new(),
+      ),
     ),
     #(
       "`variable` is a valid identifier and not the start of a `var` declaration!",
       "print; variable;",
       // The malformed var decl causes errors but we recover and parse the print statement
-      Program([Statement(ExprStatement(Variable("variable", Span(1, 8, 8))))], [
-        SyntaxError(
-          "A print clause is of the form ` print <expr>; `, you're missing the expr!",
-          Span(1, 6, 1),
-        ),
-      ]),
+      Program(
+        [Statement(ExprStatement(Variable("variable", Span(1, 8, 8))))],
+        [
+          SyntaxError(
+            "A print clause is of the form ` print <expr>; `, you're missing the expr!",
+            Span(1, 6, 1),
+          ),
+        ],
+        enviornment.new(),
+      ),
     ),
     #(
       "three different kinds of errors",
       "var name /* missing semicolon*/ print /* missing expr*/; 1 - /* missing right operand! */;",
-      Program([], [
-        SyntaxError(
-          "Expected to see an `=` for variable assignment",
-          Span(1, 33, 1),
-        ),
-        SyntaxError(
-          "A print clause is of the form ` print <expr>; `, you're missing the expr!",
-          Span(1, 38, 1),
-        ),
-        SyntaxError(
-          "Expected a number, string, or expression after operator",
-          Span(1, 90, 1),
-        ),
-      ]),
+      Program(
+        [],
+        [
+          SyntaxError(
+            "Expected to see an `=` for variable assignment",
+            Span(1, 33, 1),
+          ),
+          SyntaxError(
+            "A print clause is of the form ` print <expr>; `, you're missing the expr!",
+            Span(1, 38, 1),
+          ),
+          SyntaxError(
+            "Expected a number, string, or expression after operator",
+            Span(1, 90, 1),
+          ),
+        ],
+        enviornment.new(),
+      ),
     ),
   ]
 
@@ -221,7 +241,7 @@ pub fn program_parser_error_test() {
 
   use #(description, input, expected_formatted) <- list.each(test_cases)
   let assert Success(
-    found: Program(declarations: [], errors: [first_error, ..]),
+    found: Program(declarations: [], errors: [first_error, ..], ..),
     ..,
   ) = program.parse(input)
     as description

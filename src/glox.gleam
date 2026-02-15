@@ -1,3 +1,4 @@
+import enviornment
 import error_formatter
 import evaluator
 import expr.{type Literal, Boolean, Number, String as LoxString}
@@ -37,7 +38,7 @@ pub fn run_repl_prompt() {
     _ -> {
       case parser.parse(source) {
         Success(parsed_expr, _) ->
-          case evaluator.eval(parsed_expr) {
+          case evaluator.eval(parsed_expr, enviornment.new()) {
             Ok(value) -> format_value(value)
             Error(RuntimeError(message, span)) ->
               error_formatter.format_error(
