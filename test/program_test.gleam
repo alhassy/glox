@@ -11,6 +11,8 @@ import gleam/string
 import gleeunit
 import parser_combinators.{Span, Success, SyntaxError}
 import program.{ExprStatement, Print, Program, Statement, VarDecl}
+import program_evaluator
+import program_parser
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -28,10 +30,12 @@ pub fn program_eval_error_test() {
   ]
 
   use #(description, input, expected_side_effects) <- list.each(test_cases)
-  let assert Success(found: program, ..) = program.parse(input) as description
+  let assert Success(found: program, ..) = program_parser.parse(input)
+    as description
   let transparent_io =
     IO(print: fn(str) { "PRINTED " <> str }, error: fn(str) { "ERROR " <> str })
-  let actual_side_effects = program.eval(transparent_io, input, program)
+  let actual_side_effects =
+    program_evaluator.eval(transparent_io, input, program)
   assert actual_side_effects == expected_side_effects |> list.map(dedent)
     as description
 }
@@ -49,10 +53,12 @@ pub fn program_eval_success_test() {
   ]
 
   use #(description, input, expected_side_effects) <- list.each(test_cases)
-  let assert Success(found: program, ..) = program.parse(input) as description
+  let assert Success(found: program, ..) = program_parser.parse(input)
+    as description
   let transparent_io =
     IO(print: fn(str) { "PRINTED " <> str }, error: fn(str) { "ERROR " <> str })
-  let actual_side_effects = program.eval(transparent_io, input, program)
+  let actual_side_effects =
+    program_evaluator.eval(transparent_io, input, program)
   assert actual_side_effects == expected_side_effects as description
 }
 
@@ -174,7 +180,8 @@ pub fn program_parser_success_test() {
   ]
 
   use #(description, input, expected_program) <- list.each(test_cases)
-  let assert Success(found:, remaining:) = program.parse(input) as description
+  let assert Success(found:, remaining:) = program_parser.parse(input)
+    as description
   assert remaining.unconsumed == "" as "All input consumed by program parser"
   assert found == expected_program as description
 }
@@ -243,7 +250,7 @@ pub fn program_parser_error_test() {
   let assert Success(
     found: Program(declarations: [], errors: [first_error, ..], ..),
     ..,
-  ) = program.parse(input)
+  ) = program_parser.parse(input)
     as description
   let formatted =
     error_formatter.format_error(
