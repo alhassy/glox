@@ -755,6 +755,7 @@ pub fn word() -> Parser(String) {
 }
 
 /// Parse an identifier (longest possible alphanumeric string, at least one char).
+/// (TODO: This should probably check that the string does not start with a digit!)
 pub fn identifier() -> Parser(String) {
   pop()
   |> filter(is_alphanumeric, "Expected alphanumeric")

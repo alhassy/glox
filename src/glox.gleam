@@ -38,8 +38,8 @@ pub fn run_repl_prompt() {
     _ -> {
       case parser.parse(source) {
         Success(parsed_expr, _) ->
-          case expr_evaluator.eval(parsed_expr, enviornment.new()) {
-            Ok(value) -> format_value(value)
+          case expr_evaluator.eval(parsed_expr).run(enviornment.new()) {
+            Ok(#(_, value)) -> format_value(value)
             Error(RuntimeError(message, span)) ->
               error_formatter.format_error(
                 kind: "Runtime error",

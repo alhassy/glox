@@ -19,6 +19,8 @@ pub type Expr {
   Literal(value: Literal, span: Span)
   Op(op: Operator, operands: List(Expr), span: Span)
   Grouping(expr: Expr, span: Span)
+  /// The value of an assignment "l = r" is whatever the value of "r" is.
+  Assign(name: String, expr: Expr, span: Span)
 }
 
 pub type Literal {

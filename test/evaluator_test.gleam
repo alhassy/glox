@@ -3,8 +3,10 @@ import expr.{Boolean, Number, String}
 import expr_evaluator
 import expr_parser as parser
 import gleam/list
+import gleam/result
 import gleeunit
 import parser_combinators.{Success}
+import type_error
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -61,9 +63,10 @@ pub fn evaluate_expression_test() {
 // Helper Functions
 // ============================================================================
 
-fn eval(input) {
+fn eval(input) -> Result(expr.Literal, type_error.RuntimeError) {
   let assert Success(parsed_expr, _) = parser.parse(input)
-  expr_evaluator.eval(parsed_expr, enviornment.new())
+  expr_evaluator.eval(parsed_expr).run(enviornment.new())
+  |> result.map(fn(p) { p.1 })
 }
 
 fn test_each(test_cases: List(a), run_test: fn(a) -> Nil) -> Nil {

@@ -10,6 +10,7 @@ import parser_combinators.{type Parser} as parse
 /// A Gleam parser for the following grammar.
 /// ```
 /// expression     → equality ;
+/// assignment     → IDENTIFIER "=" assignment | equality ;
 /// equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 /// comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 /// term           → factor ( ( "-" | "+" ) factor )* ;
@@ -85,7 +86,20 @@ fn lexeme(parser: parse.Parser(a)) -> parse.Parser(a) {
 // ----------------------------------------------------------------------------
 
 fn expression() -> parse.Parser(Expr) {
-  equality()
+  assignment()
+}
+
+const get = parse.then
+
+/// assignment     → IDENTIFIER "=" assignment | equality ;
+fn assignment() -> parse.Parser(Expr) {
+  {
+    use #(name, span) <- get(parse.identifier() |> parse.with_span)
+    use _ <- get(parse.string("=") |> lexeme)
+    use expr <- get(assignment())
+    parse.return(expr.Assign(name, expr, span))
+  }
+  |> parse.or(equality())
 }
 
 fn equality() -> parse.Parser(Expr) {

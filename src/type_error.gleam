@@ -102,6 +102,7 @@ pub fn get_span(e: Expr) -> Span {
     expr.Literal(_, span) -> span
     expr.Op(_, _, span) -> span
     expr.Grouping(_, span) -> span
+    expr.Assign(_, _, span) -> span
   }
 }
 

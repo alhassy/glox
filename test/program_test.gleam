@@ -50,6 +50,12 @@ pub fn program_eval_success_test() {
     #("variable declaration then print statement", "var me = 2 * 7; print me;", [
       "PRINTED 14",
     ]),
+    #("variable overriding", "var me = 2 * 7; var me = 123; print me;", [
+      "PRINTED 123",
+    ]),
+    #("variable update", "var me = 2 * 7; me = 123; print me;", [
+      "PRINTED 123",
+    ]),
   ]
 
   use #(description, input, expected_side_effects) <- list.each(test_cases)

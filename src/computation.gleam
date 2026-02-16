@@ -94,7 +94,7 @@ pub fn update_scope(name, value) -> EffectfulComputation(io, Literal) {
 
 pub fn eval_expr(expr: Expr) -> EffectfulComputation(io, Literal) {
   fn(source: String, env: Enviornment, _io) {
-    expr_evaluator.eval(expr, env)
+    expr_evaluator.eval(expr).run(env)
     |> result.map_error(fn(err) {
       error_formatter.format_error(
         kind: "Runtime error",
@@ -103,7 +103,7 @@ pub fn eval_expr(expr: Expr) -> EffectfulComputation(io, Literal) {
         at: err.span,
       )
     })
-    |> result.map(fn(literal) { #(env, [], literal) })
+    |> result.map(fn(literal) { #(env, [], literal.1) })
   }
   |> EffectfulComputation
 }
