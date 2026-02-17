@@ -1,0 +1,17 @@
+description: Division by zero returns 0
+
+input: |-
+  print 1 / 0;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Divides,
+      [
+        Literal(Number(1.0), Span(1, 7, 1)),
+        Literal(Number(0.0), Span(1, 11, 1)),
+      ],
+      Span(1, 7, 5),
+    )))
+  evaluation: |-
+    PRINTED 0

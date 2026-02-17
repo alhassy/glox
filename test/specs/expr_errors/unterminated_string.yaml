@@ -1,0 +1,12 @@
+description: Unterminated string literal error
+
+input: |-
+  print "wor;
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, column 7
+      |
+    1 | print "wor;
+      |       ^
+      |     Whoops, it seems like you forgot to terminate this string literal!

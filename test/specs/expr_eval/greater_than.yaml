@@ -1,0 +1,17 @@
+description: Greater than
+
+input: |-
+  print 10 > 5;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      GreaterThan,
+      [
+        Literal(Number(10.0), Span(1, 7, 2)),
+        Literal(Number(5.0), Span(1, 12, 1)),
+      ],
+      Span(1, 7, 6),
+    )))
+  evaluation: |-
+    PRINTED True

@@ -1,0 +1,11 @@
+description: Leading and trailing whitespace
+
+input: |-
+  123  ;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Literal(
+      Number(123.0),
+      Span(1, 1, 3),
+    )))

@@ -1,0 +1,51 @@
+description: Re-declaring a variable shadows the previous one
+
+input: |-
+  var me = 2 * 7;
+  var me = 123;
+  print me;
+
+expectations:
+  parsing: |-
+    - VarDecl(
+      "me",
+      Some(Op(
+        Times,
+        [
+          Literal(
+            Number(2.0),
+            Span(1, 10, 1),
+          ),
+          Literal(
+            Number(7.0),
+            Span(1, 14, 1),
+          ),
+        ],
+        Span(1, 10, 5),
+      )),
+    )
+    - VarDecl(
+      "me",
+      Some(Literal(
+        Number(123.0),
+        Span(2, 10, 3),
+      )),
+    )
+    - Statement(Print(Variable(
+      "me",
+      Span(3, 7, 2),
+    )))
+  evaluation: |-
+    PRINTED 123
+    ENV: Enviornment([
+      #("me", Number(123.0)),
+      #("me", Number(14.0)),
+      #("me", Number(14.0)),
+      #("me", Number(123.0)),
+      #("me", Number(14.0)),
+      #("me", Number(14.0)),
+      #("me", Number(123.0)),
+      #("me", Number(14.0)),
+      #("me", Number(14.0)),
+      #("me", Number(14.0)),
+    ])

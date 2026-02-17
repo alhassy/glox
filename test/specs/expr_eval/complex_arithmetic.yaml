@@ -1,0 +1,30 @@
+description: Complex arithmetic
+
+input: |-
+  print 1 + 2 - 3;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Minus,
+      [
+        Op(
+          Plus,
+          [
+            Literal(
+              Number(1.0),
+              Span(1, 7, 1),
+            ),
+            Literal(
+              Number(2.0),
+              Span(1, 11, 1),
+            ),
+          ],
+          Span(1, 7, 9),
+        ),
+        Literal(Number(3.0), Span(1, 15, 1)),
+      ],
+      Span(1, 7, 9),
+    )))
+  evaluation: |-
+    PRINTED 0

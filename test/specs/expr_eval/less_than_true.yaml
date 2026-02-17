@@ -1,0 +1,40 @@
+description: Less than - true
+
+input: |-
+  print 1 + 2 - 3 < 5;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      LessThan,
+      [
+        Op(
+          Minus,
+          [
+            Op(
+              Plus,
+              [
+                Literal(
+                  Number(1.0),
+                  Span(1, 7, 1),
+                ),
+                Literal(
+                  Number(2.0),
+                  Span(1, 11, 1),
+                ),
+              ],
+              Span(1, 7, 10),
+            ),
+            Literal(
+              Number(3.0),
+              Span(1, 15, 1),
+            ),
+          ],
+          Span(1, 7, 10),
+        ),
+        Literal(Number(5.0), Span(1, 19, 1)),
+      ],
+      Span(1, 7, 13),
+    )))
+  evaluation: |-
+    PRINTED True

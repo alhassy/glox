@@ -1,0 +1,12 @@
+description: Unterminated print statement (missing semicolon)
+
+input: |-
+  print 1
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, column 8
+      |
+    1 | print 1
+      |        ^
+      |     I expected to see a semicolon here 🤔

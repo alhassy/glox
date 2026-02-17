@@ -1,0 +1,12 @@
+description: Variable declaration without terminating semicolon
+
+input: |-
+  var name = 123
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, column 15
+      |
+    1 | var name = 123
+      |               ^
+      |     I expected to see a semicolon here 🤔

@@ -28,3 +28,24 @@ pub fn new() -> Enviornment {
 pub fn merge_into(incoming: Enviornment, base: Enviornment) -> Enviornment {
   list.append(incoming.pairs, base.pairs) |> Enviornment
 }
+
+/// Get all variable bindings as a list of (name, value) pairs.
+/// Returns only the most recent binding for each variable name.
+pub fn to_list(env: Enviornment) -> List(#(String, Literal)) {
+  env.pairs
+  |> unique_by_name([])
+}
+
+fn unique_by_name(
+  pairs: List(#(String, Literal)),
+  seen: List(String),
+) -> List(#(String, Literal)) {
+  case pairs {
+    [] -> []
+    [#(name, value), ..rest] ->
+      case list.contains(seen, name) {
+        True -> unique_by_name(rest, seen)
+        False -> [#(name, value), ..unique_by_name(rest, [name, ..seen])]
+      }
+  }
+}

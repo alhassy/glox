@@ -1,0 +1,12 @@
+description: Missing operator between values
+
+input: |-
+  print 1 2;
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, column 9
+      |
+    1 | print 1 2;
+      |         ^
+      |     Expected one of `*`, `/` before `2`

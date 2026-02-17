@@ -1,0 +1,11 @@
+description: Nil literal
+
+input: |-
+  nil;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Literal(
+      Nil,
+      Span(1, 1, 3),
+    )))

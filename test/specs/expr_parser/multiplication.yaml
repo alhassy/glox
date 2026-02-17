@@ -1,0 +1,15 @@
+description: Multiplication
+
+input: |-
+  2 * 3;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      Times,
+      [
+        Literal(Number(2.0), Span(1, 1, 1)),
+        Literal(Number(3.0), Span(1, 5, 1)),
+      ],
+      Span(1, 1, 5),
+    )))

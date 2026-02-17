@@ -1,0 +1,23 @@
+description: String concatenation
+
+input: |-
+  print "hello" + "world";
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Plus,
+      [
+        Literal(
+          String("hello"),
+          Span(1, 7, 7),
+        ),
+        Literal(
+          String("world"),
+          Span(1, 17, 7),
+        ),
+      ],
+      Span(1, 7, 17),
+    )))
+  evaluation: |-
+    PRINTED "helloworld"

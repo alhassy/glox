@@ -1,0 +1,33 @@
+description: Multiple print statements with division and multiplication
+
+input: |-
+  print 38 / 2;
+  print 44 * 4;
+  print "bye";
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Divides,
+      [
+        Literal(Number(38.0), Span(1, 7, 2)),
+        Literal(Number(2.0), Span(1, 12, 1)),
+      ],
+      Span(1, 7, 6),
+    )))
+    - Statement(Print(Op(
+      Times,
+      [
+        Literal(Number(44.0), Span(2, 7, 2)),
+        Literal(Number(4.0), Span(2, 12, 1)),
+      ],
+      Span(2, 7, 6),
+    )))
+    - Statement(Print(Literal(
+      String("bye"),
+      Span(3, 7, 5),
+    )))
+  evaluation: |-
+    PRINTED 19
+    PRINTED 176
+    PRINTED "bye"

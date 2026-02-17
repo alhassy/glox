@@ -1,0 +1,12 @@
+description: Unterminated block comment
+
+input: |-
+  print 1 + /* hola;
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, columns 11-12
+      |
+    1 | print 1 + /* hola;
+      |           ^^
+      |     Unterminated `/* ... */`

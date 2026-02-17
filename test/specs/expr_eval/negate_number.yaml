@@ -1,0 +1,14 @@
+description: Numeric negation
+
+input: |-
+  print -5;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      NumericNegation,
+      [Literal(Number(5.0), Span(1, 8, 1))],
+      Span(1, 7, 1),
+    )))
+  evaluation: |-
+    PRINTED -5

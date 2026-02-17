@@ -1,0 +1,12 @@
+description: Empty parentheses error
+
+input: |-
+  print (;
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, column 8
+      |
+    1 | print (;
+      |        ^
+      |     Expected expression after '('

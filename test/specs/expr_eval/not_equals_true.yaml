@@ -1,0 +1,17 @@
+description: Not equals - true
+
+input: |-
+  print 5 != 6;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      NotEquals,
+      [
+        Literal(Number(5.0), Span(1, 7, 1)),
+        Literal(Number(6.0), Span(1, 12, 1)),
+      ],
+      Span(1, 7, 6),
+    )))
+  evaluation: |-
+    PRINTED True

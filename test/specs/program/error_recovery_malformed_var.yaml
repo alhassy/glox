@@ -1,0 +1,18 @@
+description: Malformed var decl doesn't prevent parsing subsequent statements
+
+input: |-
+  var name "James!" /* whoops, forgot the =!*/ print "Bye";
+
+expectations:
+  parsing: |-
+    - Statement(Print(Literal(
+      String("Bye"),
+      Span(1, 52, 5),
+    )))
+    - ┌─ Syntax error at line 1, column 10
+      |
+    1 | var name "James!" /* whoops, forgot the =!*/ print "Bye";
+      |          ^
+      |     Expected to see an `=` for variable assignment
+  evaluation: |-
+    PRINTED "Bye"

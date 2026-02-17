@@ -1,0 +1,12 @@
+description: Numeric negation
+
+input: |-
+  -42;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      NumericNegation,
+      [Literal(Number(42.0), Span(1, 2, 2))],
+      Span(1, 1, 1),
+    )))

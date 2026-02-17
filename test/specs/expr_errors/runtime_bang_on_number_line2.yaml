@@ -1,0 +1,44 @@
+description: Runtime error - ! on number on line 2
+
+input: |-
+  print 1 + 2 +
+    !123;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Plus,
+      [
+        Op(
+          Plus,
+          [
+            Literal(
+              Number(1.0),
+              Span(1, 7, 1),
+            ),
+            Literal(
+              Number(2.0),
+              Span(1, 11, 1),
+            ),
+          ],
+          Span(1, 7, 1),
+        ),
+        Op(
+          BooleanNegation,
+          [
+            Literal(
+              Number(123.0),
+              Span(2, 4, 3),
+            ),
+          ],
+          Span(2, 3, 1),
+        ),
+      ],
+      Span(1, 7, 1),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 2, columns 4-6
+      |
+    2 |   !123;
+      |    ^^^
+      |     Cannot apply '!' to number; expected boolean

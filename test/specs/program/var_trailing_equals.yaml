@@ -1,0 +1,12 @@
+description: Variable declaration with trailing = but no initializer
+
+input: |-
+  var name =
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, column 11
+      |
+    1 | var name =
+      |           ^
+      |     I expected to see an expression here 😖

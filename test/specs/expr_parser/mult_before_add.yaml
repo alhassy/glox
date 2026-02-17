@@ -1,0 +1,28 @@
+description: Multiplication before addition
+
+input: |-
+  1 * 2 + 3;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      Plus,
+      [
+        Op(
+          Times,
+          [
+            Literal(
+              Number(1.0),
+              Span(1, 1, 1),
+            ),
+            Literal(
+              Number(2.0),
+              Span(1, 5, 1),
+            ),
+          ],
+          Span(1, 1, 6),
+        ),
+        Literal(Number(3.0), Span(1, 9, 1)),
+      ],
+      Span(1, 1, 9),
+    )))

@@ -1,0 +1,57 @@
+description: Complex nested expression
+
+input: |-
+  1 * 2  !=   (2 < (0 - 0));
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      NotEquals,
+      [
+        Op(
+          Times,
+          [
+            Literal(
+              Number(1.0),
+              Span(1, 1, 1),
+            ),
+            Literal(
+              Number(2.0),
+              Span(1, 5, 1),
+            ),
+          ],
+          Span(1, 1, 7),
+        ),
+        Grouping(
+          Op(
+            LessThan,
+            [
+              Literal(
+                Number(2.0),
+                Span(1, 14, 1),
+              ),
+              Grouping(
+                Op(
+                  Minus,
+                  [
+                    Literal(
+                      Number(0.0),
+                      Span(1, 19, 1),
+                    ),
+                    Literal(
+                      Number(0.0),
+                      Span(1, 23, 1),
+                    ),
+                  ],
+                  Span(1, 19, 5),
+                ),
+                Span(1, 18, 7),
+              ),
+            ],
+            Span(1, 14, 11),
+          ),
+          Span(1, 13, 13),
+        ),
+      ],
+      Span(1, 1, 25),
+    )))

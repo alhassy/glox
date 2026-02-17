@@ -1,0 +1,12 @@
+description: Variable declaration missing = between name and value
+
+input: |-
+  var name 123
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, column 10
+      |
+    1 | var name 123
+      |          ^
+      |     Expected to see an `=` for variable assignment

@@ -1,0 +1,33 @@
+description: Grouping changes precedence
+
+input: |-
+  print (1 + 2) * 3;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Times,
+      [
+        Grouping(
+          Op(
+            Plus,
+            [
+              Literal(
+                Number(1.0),
+                Span(1, 8, 1),
+              ),
+              Literal(
+                Number(2.0),
+                Span(1, 12, 1),
+              ),
+            ],
+            Span(1, 8, 5),
+          ),
+          Span(1, 7, 7),
+        ),
+        Literal(Number(3.0), Span(1, 17, 1)),
+      ],
+      Span(1, 7, 11),
+    )))
+  evaluation: |-
+    PRINTED 9

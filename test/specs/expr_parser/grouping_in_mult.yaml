@@ -1,0 +1,21 @@
+description: Grouping in multiplication
+
+input: |-
+  (123)*4;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      Times,
+      [
+        Grouping(
+          Literal(
+            Number(123.0),
+            Span(1, 2, 3),
+          ),
+          Span(1, 1, 5),
+        ),
+        Literal(Number(4.0), Span(1, 7, 1)),
+      ],
+      Span(1, 1, 7),
+    )))

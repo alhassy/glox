@@ -1,0 +1,12 @@
+description: Unterminated expression statement (missing semicolon)
+
+input: |-
+  1 + 3
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, column 6
+      |
+    1 | 1 + 3
+      |      ^
+      |     I expected to see a semicolon here 🤔

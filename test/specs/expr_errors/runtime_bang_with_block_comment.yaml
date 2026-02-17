@@ -1,0 +1,23 @@
+description: Runtime error - ! on number with block comment
+
+input: |-
+  print ! /* hello world! */ 123;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      BooleanNegation,
+      [
+        Literal(
+          Number(123.0),
+          Span(1, 28, 3),
+        ),
+      ],
+      Span(1, 7, 21),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 1, columns 28-30
+      |
+    1 | print ! /* hello world! */ 123;
+      |                            ^^^
+      |     Cannot apply '!' to number; expected boolean

@@ -1,0 +1,24 @@
+description: Runtime error - boolean <= number (invalid combination)
+
+input: |-
+  print true <= 3;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      AtMost,
+      [
+        Literal(
+          Boolean(True),
+          Span(1, 7, 4),
+        ),
+        Literal(Number(3.0), Span(1, 15, 1)),
+      ],
+      Span(1, 7, 9),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 1, column 15
+      |
+    1 | print true <= 3;
+      |               ^
+      |     Cannot apply '<=' to boolean and number; accepted combinations are (number, number) or (boolean, boolean)

@@ -1,0 +1,17 @@
+description: Multiplication
+
+input: |-
+  print 4 * 4;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Times,
+      [
+        Literal(Number(4.0), Span(1, 7, 1)),
+        Literal(Number(4.0), Span(1, 11, 1)),
+      ],
+      Span(1, 7, 5),
+    )))
+  evaluation: |-
+    PRINTED 16

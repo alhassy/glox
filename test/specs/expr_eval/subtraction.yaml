@@ -1,0 +1,17 @@
+description: Subtraction
+
+input: |-
+  print 5 - 3;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Minus,
+      [
+        Literal(Number(5.0), Span(1, 7, 1)),
+        Literal(Number(3.0), Span(1, 11, 1)),
+      ],
+      Span(1, 7, 5),
+    )))
+  evaluation: |-
+    PRINTED 2

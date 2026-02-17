@@ -1,0 +1,20 @@
+description: Number plus string coercion
+
+input: |-
+  print 1 + "hola";
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Plus,
+      [
+        Literal(Number(1.0), Span(1, 7, 1)),
+        Literal(
+          String("hola"),
+          Span(1, 11, 6),
+        ),
+      ],
+      Span(1, 7, 10),
+    )))
+  evaluation: |-
+    PRINTED "1hola"

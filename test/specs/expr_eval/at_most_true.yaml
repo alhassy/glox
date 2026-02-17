@@ -1,0 +1,17 @@
+description: At most (<=) - true
+
+input: |-
+  print 3 <= 3;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      AtMost,
+      [
+        Literal(Number(3.0), Span(1, 7, 1)),
+        Literal(Number(3.0), Span(1, 12, 1)),
+      ],
+      Span(1, 7, 6),
+    )))
+  evaluation: |-
+    PRINTED True

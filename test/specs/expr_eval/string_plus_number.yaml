@@ -1,0 +1,23 @@
+description: String plus number coercion
+
+input: |-
+  print "value: " + 42;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Plus,
+      [
+        Literal(
+          String("value: "),
+          Span(1, 7, 9),
+        ),
+        Literal(
+          Number(42.0),
+          Span(1, 19, 2),
+        ),
+      ],
+      Span(1, 7, 14),
+    )))
+  evaluation: |-
+    PRINTED "value: 42"

@@ -1,0 +1,18 @@
+description: Runtime error - ! on number
+
+input: |-
+  print !1;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      BooleanNegation,
+      [Literal(Number(1.0), Span(1, 8, 1))],
+      Span(1, 7, 1),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 1, column 8
+      |
+    1 | print !1;
+      |        ^
+      |     Cannot apply '!' to number; expected boolean

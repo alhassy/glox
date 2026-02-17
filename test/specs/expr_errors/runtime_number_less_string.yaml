@@ -1,0 +1,24 @@
+description: Runtime error - number less than string
+
+input: |-
+  print 1 < "hello";
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      LessThan,
+      [
+        Literal(Number(1.0), Span(1, 7, 1)),
+        Literal(
+          String("hello"),
+          Span(1, 11, 7),
+        ),
+      ],
+      Span(1, 7, 11),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 1, columns 11-17
+      |
+    1 | print 1 < "hello";
+      |           ^^^^^^^
+      |     Cannot apply '<' to number and string; right operand must be number

@@ -1,0 +1,17 @@
+description: Boolean negation
+
+input: |-
+  !true;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      BooleanNegation,
+      [
+        Literal(
+          Boolean(True),
+          Span(1, 2, 4),
+        ),
+      ],
+      Span(1, 1, 1),
+    )))

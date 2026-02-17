@@ -1,0 +1,14 @@
+description: Multiline error on line 3
+
+input: |-
+  print 1 +
+  2 *
+  @ 3;
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 3, column 1
+      |
+    3 | @ 3;
+      | ^
+      |     Expected a number, string, or expression after operator

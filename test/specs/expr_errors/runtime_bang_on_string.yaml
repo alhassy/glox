@@ -1,0 +1,23 @@
+description: Runtime error - ! on string
+
+input: |-
+  print !"hola";
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      BooleanNegation,
+      [
+        Literal(
+          String("hola"),
+          Span(1, 8, 6),
+        ),
+      ],
+      Span(1, 7, 1),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 1, columns 8-13
+      |
+    1 | print !"hola";
+      |        ^^^^^^
+      |     Cannot apply '!' to string; expected boolean

@@ -1,0 +1,48 @@
+description: Factor before term precedence
+
+input: |-
+  1 * 2 - 3 / 4 + 5;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      Plus,
+      [
+        Op(
+          Minus,
+          [
+            Op(
+              Times,
+              [
+                Literal(
+                  Number(1.0),
+                  Span(1, 1, 1),
+                ),
+                Literal(
+                  Number(2.0),
+                  Span(1, 5, 1),
+                ),
+              ],
+              Span(1, 1, 6),
+            ),
+            Op(
+              Divides,
+              [
+                Literal(
+                  Number(3.0),
+                  Span(1, 9, 1),
+                ),
+                Literal(
+                  Number(4.0),
+                  Span(1, 13, 1),
+                ),
+              ],
+              Span(1, 9, 6),
+            ),
+          ],
+          Span(1, 1, 17),
+        ),
+        Literal(Number(5.0), Span(1, 17, 1)),
+      ],
+      Span(1, 1, 17),
+    )))

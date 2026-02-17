@@ -1,0 +1,23 @@
+description: The word variable is a valid identifier, not start of var declaration
+
+input: |-
+  print;
+  variable;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Variable(
+      "variable",
+      Span(2, 1, 8),
+    )))
+    - ┌─ Syntax error at line 1, column 6
+      |
+    1 | print;
+      |      ^
+      |     A print clause is of the form ` print <expr>; `, you're missing the expr!
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 2, columns 1-8
+      |
+    2 | variable;
+      | ^^^^^^^^
+      |     Variable `variable` is not in scope!

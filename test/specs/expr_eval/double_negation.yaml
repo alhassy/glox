@@ -1,0 +1,25 @@
+description: Double boolean negation
+
+input: |-
+  print !!true;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      BooleanNegation,
+      [
+        Op(
+          BooleanNegation,
+          [
+            Literal(
+              Boolean(True),
+              Span(1, 9, 4),
+            ),
+          ],
+          Span(1, 8, 1),
+        ),
+      ],
+      Span(1, 7, 1),
+    )))
+  evaluation: |-
+    PRINTED True

@@ -1,0 +1,37 @@
+description: Runtime error - grouped boolean less than number
+
+input: |-
+  print (1 < 2) < 3;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      LessThan,
+      [
+        Grouping(
+          Op(
+            LessThan,
+            [
+              Literal(
+                Number(1.0),
+                Span(1, 8, 1),
+              ),
+              Literal(
+                Number(2.0),
+                Span(1, 12, 1),
+              ),
+            ],
+            Span(1, 8, 5),
+          ),
+          Span(1, 7, 7),
+        ),
+        Literal(Number(3.0), Span(1, 17, 1)),
+      ],
+      Span(1, 7, 11),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 1, columns 7-13
+      |
+    1 | print (1 < 2) < 3;
+      |       ^^^^^^^
+      |     Cannot apply '<' to boolean; left operand must be number

@@ -1,0 +1,33 @@
+description: String concatenation with variable
+
+input: |-
+  var name = "James!";
+  print "Hello " + name;
+
+expectations:
+  parsing: |-
+    - VarDecl(
+      "name",
+      Some(Literal(
+        String("James!"),
+        Span(1, 12, 8),
+      )),
+    )
+    - Statement(Print(Op(
+      Plus,
+      [
+        Literal(
+          String("Hello "),
+          Span(2, 7, 8),
+        ),
+        Variable("name", Span(2, 18, 4)),
+      ],
+      Span(2, 7, 15),
+    )))
+  evaluation: |-
+    PRINTED "Hello James!"
+    ENV: Enviornment([
+      #("name", String("James!")),
+      #("name", String("James!")),
+      #("name", String("James!")),
+    ])

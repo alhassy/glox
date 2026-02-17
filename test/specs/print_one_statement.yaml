@@ -1,0 +1,17 @@
+description: Basic print with multiplication
+
+input: |-
+  print 2 * 7;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Times,
+      [
+        Literal(Number(2.0), Span(1, 7, 1)),
+        Literal(Number(7.0), Span(1, 11, 1)),
+      ],
+      Span(1, 7, 5),
+    )))
+  evaluation: |-
+    PRINTED 14

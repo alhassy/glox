@@ -1,0 +1,15 @@
+description: Less than
+
+input: |-
+  1 < 2;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      LessThan,
+      [
+        Literal(Number(1.0), Span(1, 1, 1)),
+        Literal(Number(2.0), Span(1, 5, 1)),
+      ],
+      Span(1, 1, 5),
+    )))

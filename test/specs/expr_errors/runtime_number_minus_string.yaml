@@ -1,0 +1,21 @@
+description: Runtime error - number minus string (right operand wrong)
+
+input: |-
+  print 1 - "1";
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Minus,
+      [
+        Literal(Number(1.0), Span(1, 7, 1)),
+        Literal(String("1"), Span(1, 11, 3)),
+      ],
+      Span(1, 7, 7),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 1, columns 11-13
+      |
+    1 | print 1 - "1";
+      |           ^^^
+      |     Cannot apply '-' to number and string; right operand must be number

@@ -1,0 +1,11 @@
+description: False literal
+
+input: |-
+  false;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Literal(
+      Boolean(False),
+      Span(1, 1, 5),
+    )))

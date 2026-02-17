@@ -1,0 +1,16 @@
+description: Line comment
+
+input: |-
+  1 + 2;
+  // this is a comment
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      Plus,
+      [
+        Literal(Number(1.0), Span(1, 1, 1)),
+        Literal(Number(2.0), Span(1, 5, 1)),
+      ],
+      Span(1, 1, 5),
+    )))

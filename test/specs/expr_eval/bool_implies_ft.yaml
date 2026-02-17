@@ -1,0 +1,23 @@
+description: Boolean comparison - false <= true (F implies T)
+
+input: |-
+  print false <= true;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      AtMost,
+      [
+        Literal(
+          Boolean(False),
+          Span(1, 7, 5),
+        ),
+        Literal(
+          Boolean(True),
+          Span(1, 16, 4),
+        ),
+      ],
+      Span(1, 7, 13),
+    )))
+  evaluation: |-
+    PRINTED True

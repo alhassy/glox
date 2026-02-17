@@ -1,7 +1,7 @@
 import computation.{type EffectfulComputation, type IO}
+import enviornment.{type Enviornment}
 import error_formatter
 import expr.{type Literal, Literal, Nil as LNil}
-import gleam/list
 import gleam/option
 import parser_combinators as parse
 import program.{
@@ -16,34 +16,25 @@ pub fn parse_and_evaluate(my_io: IO(io_output), source: String) {
     |> parser.program()
   case parse_result {
     parse.Success(found: program, ..) -> eval(my_io, source, program)
-    parse.Error(message:, at:, ..) -> [
-      error_formatter.format_error(kind: "Syntax error", message:, source:, at:)
-      |> my_io.print,
-    ]
+    parse.Error(message:, at:, ..) ->
+      #(enviornment.new(), [
+        error_formatter.format_error(kind: "Syntax error", message:, source:, at:)
+        |> my_io.print,
+      ])
   }
 }
 
 /// Evaluation of a program is the execution of a bunch of statements, which produces side-effects
-/// and returns no value. The IO argument is useful for testing purposes
-pub fn eval(my_io: IO(io_output), source, program) -> List(io_output) {
-  let Program(declarations:, errors:, enviornment:) = program
-  // First, print any syntax errors that were recovered from
-  let syntax_error_outputs =
-    list.map(errors, fn(err) {
-      error_formatter.format_error(
-        kind: "Syntax error",
-        message: err.message,
-        source:,
-        at: err.at,
-      )
-      |> my_io.print
-    })
-  // Then evaluate the successfully parsed declarations
-  let #(_env, io_outputs) =
-    eval_declarations(declarations)
-    |> computation.execute(source, enviornment, my_io)
-  // enviornment, my_io, source, 
-  list.append(syntax_error_outputs, io_outputs)
+/// and returns the final environment. The IO argument is useful for testing purposes.
+/// Note: Syntax errors are NOT printed here - they belong in the parsing phase.
+pub fn eval(
+  my_io: IO(io_output),
+  source,
+  program,
+) -> #(Enviornment, List(io_output)) {
+  let Program(declarations:, enviornment:, ..) = program
+  eval_declarations(declarations)
+  |> computation.execute(source, enviornment, my_io)
 }
 
 fn eval_declarations(

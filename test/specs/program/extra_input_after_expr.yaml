@@ -1,0 +1,12 @@
+description: Extra unexpected input after expression
+
+input: |-
+  true & then some extra input;
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 1, column 6
+      |
+    1 | true & then some extra input;
+      |      ^
+      |     I expected to see a semicolon here 🤔

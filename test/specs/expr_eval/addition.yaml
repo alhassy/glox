@@ -1,0 +1,17 @@
+description: Addition
+
+input: |-
+  print 1 + 2;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Plus,
+      [
+        Literal(Number(1.0), Span(1, 7, 1)),
+        Literal(Number(2.0), Span(1, 11, 1)),
+      ],
+      Span(1, 7, 5),
+    )))
+  evaluation: |-
+    PRINTED 3

@@ -1,0 +1,42 @@
+description: Assignment expression (not yet supported, shows syntax error)
+
+input: |-
+  var me = 2 * 7;
+  me = 123;
+  print me;
+
+expectations:
+  parsing: |-
+    - VarDecl(
+      "me",
+      Some(Op(
+        Times,
+        [
+          Literal(
+            Number(2.0),
+            Span(1, 10, 1),
+          ),
+          Literal(
+            Number(7.0),
+            Span(1, 14, 1),
+          ),
+        ],
+        Span(1, 10, 5),
+      )),
+    )
+    - Statement(Print(Variable(
+      "me",
+      Span(3, 7, 2),
+    )))
+    - ┌─ Syntax error at line 2, column 4
+      |
+    2 | me = 123;
+      |    ^
+      |     I expected to see a semicolon here 🤔
+  evaluation: |-
+    PRINTED 14
+    ENV: Enviornment([
+      #("me", Number(14.0)),
+      #("me", Number(14.0)),
+      #("me", Number(14.0)),
+    ])

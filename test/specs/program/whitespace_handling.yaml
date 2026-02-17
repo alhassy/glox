@@ -1,0 +1,34 @@
+description: Multiple prints with extra whitespace between statements
+
+input: |-
+  print 38 / 2;  print 44 * 4;    print "bye"  ;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Divides,
+      [
+        Literal(Number(38.0), Span(1, 7, 2)),
+        Literal(Number(2.0), Span(1, 12, 1)),
+      ],
+      Span(1, 7, 6),
+    )))
+    - Statement(Print(Op(
+      Times,
+      [
+        Literal(
+          Number(44.0),
+          Span(1, 22, 2),
+        ),
+        Literal(Number(4.0), Span(1, 27, 1)),
+      ],
+      Span(1, 22, 6),
+    )))
+    - Statement(Print(Literal(
+      String("bye"),
+      Span(1, 39, 5),
+    )))
+  evaluation: |-
+    PRINTED 19
+    PRINTED 176
+    PRINTED "bye"

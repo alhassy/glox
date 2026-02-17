@@ -1,0 +1,51 @@
+description: Comparison before equality precedence
+
+input: |-
+  1 * 2  <=  3 / 4    ==   true;
+
+expectations:
+  parsing: |-
+    - Statement(ExprStatement(Op(
+      Equals,
+      [
+        Op(
+          AtMost,
+          [
+            Op(
+              Times,
+              [
+                Literal(
+                  Number(1.0),
+                  Span(1, 1, 1),
+                ),
+                Literal(
+                  Number(2.0),
+                  Span(1, 5, 1),
+                ),
+              ],
+              Span(1, 1, 7),
+            ),
+            Op(
+              Divides,
+              [
+                Literal(
+                  Number(3.0),
+                  Span(1, 12, 1),
+                ),
+                Literal(
+                  Number(4.0),
+                  Span(1, 16, 1),
+                ),
+              ],
+              Span(1, 12, 9),
+            ),
+          ],
+          Span(1, 1, 20),
+        ),
+        Literal(
+          Boolean(True),
+          Span(1, 26, 4),
+        ),
+      ],
+      Span(1, 1, 29),
+    )))

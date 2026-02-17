@@ -1,0 +1,24 @@
+description: Three different kinds of syntax errors with recovery
+
+input: |-
+  var name /* missing semicolon*/ 
+  print /* missing expr*/;
+  1 - /* missing right operand! */;
+
+expectations:
+  parsing: |-
+    - ┌─ Syntax error at line 2, column 1
+      |
+    2 | print /* missing expr*/;
+      | ^
+      |     Expected to see an `=` for variable assignment
+    - ┌─ Syntax error at line 2, column 6
+      |
+    2 | print /* missing expr*/;
+      |      ^
+      |     A print clause is of the form ` print <expr>; `, you're missing the expr!
+    - ┌─ Syntax error at line 3, column 33
+      |
+    3 | 1 - /* missing right operand! */;
+      |                                 ^
+      |     Expected a number, string, or expression after operator

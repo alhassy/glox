@@ -1,0 +1,21 @@
+description: Runtime error - nil less than nil (left wrong)
+
+input: |-
+  print nil < nil;
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      LessThan,
+      [
+        Literal(Nil, Span(1, 7, 3)),
+        Literal(Nil, Span(1, 13, 3)),
+      ],
+      Span(1, 7, 9),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 1, columns 7-9
+      |
+    1 | print nil < nil;
+      |       ^^^
+      |     Cannot apply '<' to nil; left operand must be number

@@ -1,0 +1,29 @@
+description: Nested grouping
+
+input: |-
+  print ((1 + 2));
+
+expectations:
+  parsing: |-
+    - Statement(Print(Grouping(
+      Grouping(
+        Op(
+          Plus,
+          [
+            Literal(
+              Number(1.0),
+              Span(1, 9, 1),
+            ),
+            Literal(
+              Number(2.0),
+              Span(1, 13, 1),
+            ),
+          ],
+          Span(1, 9, 5),
+        ),
+        Span(1, 8, 7),
+      ),
+      Span(1, 7, 9),
+    )))
+  evaluation: |-
+    PRINTED 3

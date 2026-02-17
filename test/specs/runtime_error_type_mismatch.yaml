@@ -1,0 +1,38 @@
+description: Runtime error - type mismatch in multiplication
+
+input: |-
+  print 38 / 2;
+  44 * true;
+  print "bye";
+
+expectations:
+  parsing: |-
+    - Statement(Print(Op(
+      Divides,
+      [
+        Literal(Number(38.0), Span(1, 7, 2)),
+        Literal(Number(2.0), Span(1, 12, 1)),
+      ],
+      Span(1, 7, 6),
+    )))
+    - Statement(ExprStatement(Op(
+      Times,
+      [
+        Literal(Number(44.0), Span(2, 1, 2)),
+        Literal(
+          Boolean(True),
+          Span(2, 6, 4),
+        ),
+      ],
+      Span(2, 1, 9),
+    )))
+    - Statement(Print(Literal(
+      String("bye"),
+      Span(3, 7, 5),
+    )))
+  evaluation: |-
+    ERROR ┌─ Runtime error at line 2, columns 6-9
+      |
+    2 | 44 * true;
+      |      ^^^^
+      |     Cannot apply '*' to number and boolean; right operand must be number
