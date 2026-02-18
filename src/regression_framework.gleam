@@ -1,5 +1,18 @@
-/// A generic file-based regression test framework.
+/// A generic file-based regression test framework. (tldr: A poor man's "REPL" where REPL explorations are kept-around as specifications of desired behaviour.)
 ///
+/// **This is   expect-tests  for Gleam.**
+/// 
+/// Snapshot testing allows you to perform assertions without having to write the expectation yourself. 
+/// You write a test's input in a .yaml file, then run `gleam update_expectations` and the expected
+/// value of the test are generated for you. Then `gleam test` verifies that the actual values match
+/// the test file's expectations. 
+/// 
+/// Imagine doing a `assert f1(input) == expected && f2(input) == expected2 && ... && fN(input) == expectedN`
+/// where you don’t have to take care of writing the expected outputs.
+/// You instantiate a regression framework for functions f1, ..., fN; then write a bunch of tests by giving only
+/// the inputs, then the framework produces the expectations for each test dimension f_i. Moreover, the input
+/// and the output dimensions are next to each other so you can easily compare and constrast.
+/// 
 /// Test cases are stored as `.yaml` files with named dimensions under `expectations:`.
 /// The framework is parameterized by dimension names and transform functions.
 ///
@@ -111,6 +124,10 @@
 /// The framework excels when you have **multi-dimensional outputs** where humans need to
 /// read and review the specifications. Examples:
 ///
+/// **JSON & Validation** - Input is a JSON payload, and output expectations
+/// are the deseralisation of the JSON along with a validation check that happens after
+/// deserilisation but is otherwise not written to the snapshot test.
+/// 
 /// **SQL Query Planner** - One query input, multiple dimensions:
 /// - `parsed_ast`: The raw parse tree
 /// - `optimized_plan`: After query optimization (filter pushdown, join reordering)
@@ -302,6 +319,117 @@
 ///     Program(
 ///       declarations: [...
 /// Using cymbal would only save ~5 lines of code anyway, not worth the tradeoff.
+/// 
+/// # What about Birdie?
+///
+/// [Birdie](https://github.com/giacomocavalieri/birdie) is Gleam's snapshot testing library.
+/// + Here's an [excellent tutorial on Birdie](https://giacomocavalieri.me/writing/testing-can-be-fun-actually).
+/// Here's how the two approaches compare:
+///
+/// **Birdie workflow:**
+/// ```gleam
+/// // test/my_test.gleam
+/// pub fn parse_addition_test() {
+///   parse("1 + 2;") |> pprint.format |> birdie.snap(title: "parse addition")
+/// }
+/// ```
+/// ```
+/// gleam test                  # First run fails, creates .new file
+/// gleam run -m birdie         # Interactive review: accept/reject each snapshot
+/// ```
+/// Result: `birdie_snapshots/parse_addition.accepted` contains just the output.
+///
+/// **This framework's workflow:**
+/// ```yaml
+/// # test/specs/addition.yaml
+/// description: Parse addition
+/// input: |-
+///   1 + 2;
+/// expectations:
+///   parsing: |-
+///     TODO
+/// ```
+/// ```
+/// gleam run -m update_expectations   # Bulk update all expectations
+/// gleam test                         # Verify tests pass
+/// ```
+/// Result: Input and expected output live together in the same YAML file.
+///
+/// **Key differences:**
+/// | Aspect | Birdie | This Framework |
+/// |--------|--------|----------------|
+/// | Input location | In test code | In YAML file with output |
+/// | Snapshot location | Separate `birdie_snapshots/` dir | Same file as input |
+/// | Update flow | Interactive (one-by-one) | Bulk (all at once) |
+/// | Dimensions | One snap() call per dimension | Multiple dimensions per file |
+/// | Review | Accept/reject each change | Review git diff |
+///
+/// **When to use Birdie:** Single-output tests where input is natural in code.
+/// **When to use this framework:** Multi-dimensional tests where input+output
+/// together form a specification document.
+///
+/// **Review phase:**
+/// - Birdie has a dedicated interactive review CLI (`gleam run -m birdie`)
+///   where you accept/reject each snapshot change one at a time.
+/// - This framework relies on `git diff` as the review phase. After running
+///   `gleam run -m update_expectations`, you review changes with your normal
+///   git workflow (`git diff`, `git add -p`, etc.) before committing.
+///
+/// **Philosophical difference:**
+/// - Birdie: Snapshots are an implementation detail; tests live in code
+/// - This framework: YAML files *are* the tests; they serve as documentation/specification
+/// 
+/// Moreover, whereas Birdie requires unique titles for snapshots,
+/// our framework uses plain old text files and so uniqueness is easy to
+/// maintain. No need to look into gleam `*_test.gleam` files to ensure titles are unique.
+/// Moreover, we can use directories to structure tests so that test file names only need
+/// to be unique relative to the current directory! (Not globally unique like in Birdie.)
+/// 
+/// Unlike Birdie however, our framework requires a bit of setup: 
+/// Users need to define which functions the framework will be computing,
+/// declare a test file to run the snapshot tests, and declare a file to update the tests.
+/// Moreover, this process has to be repeated for each family of interesting test dimensions.
+/// In practice, this is not a problem.
+/// 
+/// Another intersting tool in a similar spirit is OCaml's 
+/// [ppx_expect](https://github.com/janestreet/ppx_expect),
+/// which is essentially Emac's [`C-u C-x C-e`](https://github.com/alhassy/repl-driven-development) for 
+/// ["insert the actual value here"](https://ianthehenry.com/posts/my-kind-of-repl/).
+/// 
+/// # Personal Usage
+/// 
+/// I personally like to write a snapshot test to characterize the current behaviour of
+/// something, then write a series of patches to change parts of the output until it matches
+/// what I think it ought to be. Usually, I'll leave a note in the message like "TODO: This characterises
+/// the current behaviour, but ideally X should happen" then axe the note once feature X is implemented.
+/// 
+/// However, one downside of snapshot testing is that it's too easy to write tests and so too easy
+/// to write useless tests. As such, I insist on a "description" for each test to ensure that a high-level
+/// description preceeds every test.
+/// + Another way to mitigate this is to have some form of semantic equivalence on tests, then the test
+///   framework can report an error whenever multiple tests are semantically identical; e.g., they're
+///   somehow testing the same thing. This is a tricky problem. For fun, read about e-graphs.
+/// 
+/// Finally, an immediate benefit of snapshot tests is that they become a corpus of potentially interesting
+/// examples of how certain features work ---which is helpful if you forget how those features work, or if
+/// someone new is joining the dev team. As such, I tend to put a lot of effort into my snapshot tests (at work, at
+/// least) with lots of comments explanining how things work. As a result, the snapshot tests become "live coding environments"
+/// similar to Juypter Notebooks or Emacs' Org-babel blocks.
+/// 
+/// PS. The motivational reason for writing the framework is that I was testing a method called `eval` that produced
+/// weird behaviour and I wanted to debug it by looking at the intermediary results of a method called `parse`, however
+/// a simple `io.println` was not very helpful since that produced output for all tests. The framework let me define
+/// these two dimensions against an input string so that I can see where things went off the rails.
+/// 
+/// ## Non-use-cases
+/// Sometimes `assert actual == expected` cannot be written down practically since `expected` is hundreds of lines.
+/// In such cases, you seralize `expected` and the test becomes `assert actual == deseralize("my-file.txt")`. We refer to
+/// `my-file.txt` as containing a snapshot of the expectation. If this test fails, then the snapshot is out of date and should be
+/// updated, or some code changes should be reverted.
+/// 
+/// If you need to do this once, then don't use the regression framework. If you need to do something like this many times,
+/// then do use the framework.
+/// 
 import gap
 import gap/styled_comparison.{StyledComparison}
 import gleam/dict.{type Dict}
