@@ -1,4 +1,4 @@
-description: Assignment expression (not yet supported, shows syntax error)
+description: Assignment expression
 
 input: |-
   var me = 2 * 7;
@@ -24,19 +24,15 @@ expectations:
         Span(1, 10, 5),
       )),
     )
+    - Statement(ExprStatement(Assign(
+      "me",
+      Literal(Number(123.0), Span(2, 6, 3)),
+      Span(2, 1, 2),
+    )))
     - Statement(Print(Variable(
       "me",
       Span(3, 7, 2),
     )))
-    - ┌─ Syntax error at line 2, column 4
-      |
-    2 | me = 123;
-      |    ^
-      |     I expected to see a semicolon here 🤔
   evaluation: |-
-    PRINTED 14
-    ENV: Enviornment([
-      #("me", Number(14.0)),
-      #("me", Number(14.0)),
-      #("me", Number(14.0)),
-    ])
+    PRINTED 123
+    ENV: [#("me", Number(123.0))]

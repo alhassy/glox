@@ -1,0 +1,39 @@
+description: Assignment expression, update to another variable
+
+input: |-
+  var one = 1;
+  var two = 2;
+  one = two;
+  print one;
+
+expectations:
+  parsing: |-
+    - VarDecl(
+      "one",
+      Some(Literal(
+        Number(1.0),
+        Span(1, 11, 1),
+      )),
+    )
+    - VarDecl(
+      "two",
+      Some(Literal(
+        Number(2.0),
+        Span(2, 11, 1),
+      )),
+    )
+    - Statement(ExprStatement(Assign(
+      "one",
+      Variable("two", Span(3, 7, 3)),
+      Span(3, 1, 3),
+    )))
+    - Statement(Print(Variable(
+      "one",
+      Span(4, 7, 3),
+    )))
+  evaluation: |-
+    PRINTED 2
+    ENV: [
+      #("one", Number(2.0)),
+      #("two", Number(2.0)),
+    ]

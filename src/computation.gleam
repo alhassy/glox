@@ -103,7 +103,7 @@ pub fn eval_expr(expr: Expr) -> EffectfulComputation(io, Literal) {
         at: err.span,
       )
     })
-    |> result.map(fn(literal) { #(env, [], literal.1) })
+    |> result.map(fn(env_and_value) { #(env_and_value.0, [], env_and_value.1) })
   }
   |> EffectfulComputation
 }

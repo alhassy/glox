@@ -94,7 +94,7 @@ const get = parse.then
 /// assignment     → IDENTIFIER "=" assignment | equality ;
 fn assignment() -> parse.Parser(Expr) {
   {
-    use #(name, span) <- get(parse.identifier() |> parse.with_span)
+    use #(name, span) <- get(parse.identifier() |> parse.with_span |> lexeme)
     use _ <- get(parse.string("=") |> lexeme)
     use expr <- get(assignment())
     parse.return(expr.Assign(name, expr, span))

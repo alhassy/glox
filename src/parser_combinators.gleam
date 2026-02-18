@@ -754,13 +754,21 @@ pub fn word() -> Parser(String) {
   identifier() |> or(pop())
 }
 
-/// Parse an identifier (longest possible alphanumeric string, at least one char).
-/// (TODO: This should probably check that the string does not start with a digit!)
+/// Parse an identifier (starts with letter/underscore, followed by alphanumeric).
 pub fn identifier() -> Parser(String) {
-  pop()
-  |> filter(is_alphanumeric, "Expected alphanumeric")
-  |> plus
-  |> map(string.concat)
+  // First character must be letter or underscore (not digit)
+  use first <- then(pop() |> filter(is_alpha, "Expected letter or underscore"))
+  // Remaining characters can be alphanumeric
+  use rest <- then(
+    pop()
+    |> filter(is_alphanumeric, "Expected alphanumeric")
+    |> star,
+  )
+  return(first <> string.concat(rest))
+}
+
+fn is_alpha(c: String) -> Bool {
+  c == "_" || is_letter(c)
 }
 
 /// Parse longest possible alpanumeric string that is identical to the given `id`.

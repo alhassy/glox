@@ -79,7 +79,7 @@ pub fn run_lox(input: String) -> String {
       // Only show ENV if there are variables
       let env_str = case enviornment.to_list(final_env) {
         [] -> ""
-        _ -> "\nENV: " <> pprint.format(final_env)
+        bindings -> "\nENV: " <> pprint.format(bindings)
       }
       output_str <> env_str
     }

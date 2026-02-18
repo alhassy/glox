@@ -37,15 +37,4 @@ expectations:
     )))
   evaluation: |-
     PRINTED 123
-    ENV: Enviornment([
-      #("me", Number(123.0)),
-      #("me", Number(14.0)),
-      #("me", Number(14.0)),
-      #("me", Number(123.0)),
-      #("me", Number(14.0)),
-      #("me", Number(14.0)),
-      #("me", Number(123.0)),
-      #("me", Number(14.0)),
-      #("me", Number(14.0)),
-      #("me", Number(14.0)),
-    ])
+    ENV: [#("me", Number(123.0))]
